@@ -61,12 +61,9 @@ if("$ENV{ROS_VERSION}" STREQUAL "1")
   find_package(Open3D REQUIRED)
   # ROS1 node
   add_executable(odometry_node ros1/OdometryServer.cpp)
-  target_include_directories(odometry_node PUBLIC include
-                                                  ${catkin_INCLUDE_DIRS})
-  target_link_libraries(odometry_node kiss_icp::pipeline ${catkin_LIBRARIES}
-                        Open3D::Open3D )
-  install(TARGETS odometry_node
-          RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+  target_include_directories(odometry_node PUBLIC include ${catkin_INCLUDE_DIRS})
+  target_link_libraries(odometry_node kiss_icp::pipeline ${catkin_LIBRARIES} Open3D::Open3D)
+  install(TARGETS odometry_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
   install(DIRECTORY launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 elseif("$ENV{ROS_VERSION}" STREQUAL "2")
   message(STATUS "KISS-ICP-ROS2 wrapper will be compiled")
