@@ -83,6 +83,11 @@ private:
     std::shared_ptr<open3d::geometry::PointCloud> check_pcd_ =
         std::make_shared<open3d::geometry::PointCloud>();
     Eigen::Vector3d check_pose_;
+
+    // Clusters
+    double cluster_density_ = 3.0;
+    int cluster_min_points_ = 30;
+    bool fail_state_on_ = false;
 };
 
 }  // namespace kiss_icp_ros

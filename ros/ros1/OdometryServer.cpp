@@ -63,6 +63,9 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     pnh_.param("max_points_per_voxel", config_.max_points_per_voxel, config_.max_points_per_voxel);
     pnh_.param("initial_threshold", config_.initial_threshold, config_.initial_threshold);
     pnh_.param("min_motion_th", config_.min_motion_th, config_.min_motion_th);
+    pnh_.param("fail_state_on", fail_state_on_, fail_state_on_);
+    pnh_.param("cluster_density", cluster_density_, cluster_density_);
+    pnh_.param("cluster_min_points", cluster_min_points_, cluster_min_points_);
     if (config_.max_range < config_.min_range) {
         ROS_WARN("[WARNING] max_range is smaller than min_range, setting min_range to 0.0");
         config_.min_range = 0.0;
@@ -130,10 +133,10 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     const Eigen::Quaterniond q_current = pose.unit_quaternion();
 
     // check once only for a movement of certain distance
-    if ((check_pose_ - t_current).norm() < 2) {
+    if (fail_state_on_ && ((check_pose_ - t_current).norm() > 2)) {
         check_pcd_->points_ = keypoints;
         // eps, min_points
-        auto labels = check_pcd_->ClusterDBSCAN(10, 3);
+        auto labels = check_pcd_->ClusterDBSCAN(cluster_density_, cluster_min_points_);
         std::vector<Eigen::Vector3d> colors;
         std::map<int, int> clusters_count;
         std::for_each(labels.cbegin(), labels.cend(), [&](int label) {
