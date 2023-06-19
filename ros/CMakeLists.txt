@@ -52,15 +52,17 @@ if("$ENV{ROS_VERSION}" STREQUAL "1")
                std_msgs
                tf2
                tf2_ros
+               open3d_conversions
                genmsg)
   add_service_files(FILES SaveTrajectory.srv)
   generate_messages(DEPENDENCIES std_msgs)
   catkin_package()
 
+  find_package(Open3D REQUIRED)
   # ROS1 node
   add_executable(odometry_node ros1/OdometryServer.cpp)
   target_include_directories(odometry_node PUBLIC include ${catkin_INCLUDE_DIRS})
-  target_link_libraries(odometry_node kiss_icp::pipeline ${catkin_LIBRARIES})
+  target_link_libraries(odometry_node kiss_icp::pipeline ${catkin_LIBRARIES} Open3D::Open3D)
   install(TARGETS odometry_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
   install(DIRECTORY launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 elseif("$ENV{ROS_VERSION}" STREQUAL "2")
@@ -88,6 +90,10 @@ elseif("$ENV{ROS_VERSION}" STREQUAL "2")
   rclcpp_components_register_node(odometry_component PLUGIN "kiss_icp_ros::OdometryServer" EXECUTABLE odometry_node)
 
   install(TARGETS odometry_component LIBRARY DESTINATION lib RUNTIME DESTINATION lib/${PROJECT_NAME})
+  add_executable(odometry_node ros2/OdometryServer.cpp)
+  target_include_directories(odometry_node PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(odometry_node kiss_icp::pipeline)
+  install(TARGETS odometry_node RUNTIME DESTINATION lib/${PROJECT_NAME})
   install(DIRECTORY launch rviz DESTINATION share/${PROJECT_NAME}/)
 
   ament_package()
