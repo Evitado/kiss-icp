@@ -86,6 +86,7 @@ private:
 
     // Clusters
     double cluster_density_ = 3.0;
+    double cluster_run_after_distance_ = 2.0;
     int cluster_min_points_ = 30;
     bool fail_state_on_ = false;
 };

@@ -16,6 +16,8 @@
   <!-- FAIL-STATE paramaters -->
   <arg name="cluster_density" default="3.0" />
   <arg name="cluster_min_points" default="30" />
+  <arg name="cluster_run_after_distance" default="2.0" />
+
 
   <!-- Odometry node -->
   <node pkg="kiss_icp" type="odometry_node" name="odometry_node" output="screen">
@@ -33,8 +35,9 @@
     <param name="min_motion_th" value="0.1" />
     <!-- FAIL-STATE paramaters -->
     <param name="fail_state_on" value="true" />
-    <param name="cluster_density" value="3.0" />
-    <param name="cluster_min_points" value="50" />
+    <param name="cluster_density" value="$(arg cluster_density)" />
+    <param name="cluster_min_points" value="$(arg cluster_min_points)" />
+    <param name="cluster_run_after_distance" value="$(arg cluster_run_after_distance)" />
   </node>
 
   <!-- Rosbag player, if bagfile argument was specified -->

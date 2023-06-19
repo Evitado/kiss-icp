@@ -28,7 +28,6 @@
 
 #include "open3d_conversions/open3d_conversions.h"
 
-// #include "open3d_conversions/open3d_conversions.h"
 //  KISS-ICP-ROS
 #include "OdometryServer.hpp"
 #include "Utils.hpp"
@@ -65,6 +64,8 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     pnh_.param("min_motion_th", config_.min_motion_th, config_.min_motion_th);
     pnh_.param("fail_state_on", fail_state_on_, fail_state_on_);
     pnh_.param("cluster_density", cluster_density_, cluster_density_);
+    pnh_.param("cluster_run_after_distance", cluster_run_after_distance_,
+               cluster_run_after_distance_);
     pnh_.param("cluster_min_points", cluster_min_points_, cluster_min_points_);
     if (config_.max_range < config_.min_range) {
         ROS_WARN("[WARNING] max_range is smaller than min_range, setting min_range to 0.0");
@@ -133,7 +134,7 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     const Eigen::Quaterniond q_current = pose.unit_quaternion();
 
     // check once only for a movement of certain distance
-    if (fail_state_on_ && ((check_pose_ - t_current).norm() > 2)) {
+    if (fail_state_on_ && ((check_pose_ - t_current).norm() > cluster_run_after_distance_)) {
         check_pcd_->points_ = keypoints;
         // eps, min_points
         auto labels = check_pcd_->ClusterDBSCAN(cluster_density_, cluster_min_points_);
@@ -154,12 +155,7 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
         if (clusters_count.empty()) {
             ROS_WARN("NOT ENOUGH CLUSTERS FOR LOCALISATION");
         }
-        // else if (clusters_count.size() == 1) {
-        //  TODO:: for one cluster implement something
-        //} else {
-        // TODO:: mpore than once define some metric
-        //}
-        // maybe also remove the outliers
+
         check_pose_ = t_current;
     }
 
