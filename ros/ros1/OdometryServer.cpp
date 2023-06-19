@@ -91,21 +91,22 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
 
     // Broadcast a static transformation that links with identity the specified base link to the
     // pointcloud_frame, basically to always be able to visualize the frame in rviz
-    if (child_frame_ != "base_link") {
-        static tf2_ros::StaticTransformBroadcaster br;
-        geometry_msgs::TransformStamped alias_transform_msg;
-        alias_transform_msg.header.stamp = ros::Time::now();
-        alias_transform_msg.transform.translation.x = 0.0;
-        alias_transform_msg.transform.translation.y = 0.0;
-        alias_transform_msg.transform.translation.z = 0.0;
-        alias_transform_msg.transform.rotation.x = 0.0;
-        alias_transform_msg.transform.rotation.y = 0.0;
-        alias_transform_msg.transform.rotation.z = 0.0;
-        alias_transform_msg.transform.rotation.w = 1.0;
-        alias_transform_msg.header.frame_id = child_frame_;
-        alias_transform_msg.child_frame_id = "base_link";
-        br.sendTransform(alias_transform_msg);
-    }
+
+    // if (child_frame_ != "base_link") {
+    // static tf2_ros::StaticTransformBroadcaster br;
+    // geometry_msgs::TransformStamped alias_transform_msg;
+    // alias_transform_msg.header.stamp = ros::Time::now();
+    // alias_transform_msg.transform.translation.x = 0.0;
+    // alias_transform_msg.transform.translation.y = 0.0;
+    // alias_transform_msg.transform.translation.z = 0.0;
+    // alias_transform_msg.transform.rotation.x = 0.0;
+    // alias_transform_msg.transform.rotation.y = 0.0;
+    // alias_transform_msg.transform.rotation.z = 0.0;
+    // alias_transform_msg.transform.rotation.w = 1.0;
+    // alias_transform_msg.header.frame_id = child_frame_;
+    // alias_transform_msg.child_frame_id = "base_link";
+    // br.sendTransform(alias_transform_msg);
+    //}
 
     // publish odometry msg
     ROS_INFO("KISS-ICP ROS 1 Odometry Node Initialized");
@@ -149,11 +150,12 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
         check_points_publisher_.publish((check_pub_cloud));
         if (clusters_count.empty()) {
             ROS_WARN("NOT ENOUGH CLUSTERS FOR LOCALISATION");
-        } else if (clusters_count.size() == 1) {
-            // TODO:: for one cluster implement something
-        } else {
-            // TODO:: mpore than once define some metric
         }
+        // else if (clusters_count.size() == 1) {
+        //  TODO:: for one cluster implement something
+        //} else {
+        // TODO:: mpore than once define some metric
+        //}
         // maybe also remove the outliers
         check_pose_ = t_current;
     }
