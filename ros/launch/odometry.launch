@@ -4,7 +4,7 @@
   <arg name="bagfile" default=""/>
   <arg name="visualize" default="true"/>
   <arg name="odom_frame" default="odom"/>
-  <arg name="child_frame" default="base_link"/>
+  <arg name="child_frame" default="base_footprint_tug"/>
   <arg name="topic" default=""/>
 
   <!-- KISS-ICP paramaters -->

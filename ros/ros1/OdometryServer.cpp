@@ -20,10 +20,16 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+#include <open3d/Open3D.h>
+
 #include <Eigen/Core>
+#include <algorithm>
 #include <vector>
 
-// KISS-ICP-ROS
+#include "open3d_conversions/open3d_conversions.h"
+
+// #include "open3d_conversions/open3d_conversions.h"
+//  KISS-ICP-ROS
 #include "OdometryServer.hpp"
 #include "Utils.hpp"
 
@@ -74,7 +80,8 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     frame_publisher_ = pnh_.advertise<sensor_msgs::PointCloud2>("frame", queue_size_);
     kpoints_publisher_ = pnh_.advertise<sensor_msgs::PointCloud2>("keypoints", queue_size_);
     local_map_publisher_ = pnh_.advertise<sensor_msgs::PointCloud2>("local_map", queue_size_);
-
+    check_points_publisher_ =
+        pnh_.advertise<sensor_msgs::PointCloud2>("check_points_publisher_", queue_size_);
     // Initialize trajectory publisher
     path_msg_.header.frame_id = odom_frame_;
     traj_publisher_ = pnh_.advertise<nav_msgs::Path>("trajectory", queue_size_);
@@ -114,12 +121,42 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     // Register frame, main entry point to KISS-ICP pipeline
     const auto &[frame, keypoints] = odometry_.RegisterFrame(points, timestamps);
 
-    // PublishPose
+    //  PublishPose
     const auto pose = odometry_.poses().back();
 
     // Convert from Eigen to ROS types
     const Eigen::Vector3d t_current = pose.translation();
     const Eigen::Quaterniond q_current = pose.unit_quaternion();
+
+    // check once only for a movement of certain distance
+    if ((check_pose_ - t_current).norm() < 2) {
+        check_pcd_->points_ = keypoints;
+        // eps, min_points
+        auto labels = check_pcd_->ClusterDBSCAN(10, 3);
+        std::vector<Eigen::Vector3d> colors;
+        std::map<int, int> clusters_count;
+        std::for_each(labels.cbegin(), labels.cend(), [&](int label) {
+            if (label >= 0) {
+                clusters_count[label]++;
+                colors.emplace_back(Eigen::Vector3d{0, 0, 0}.array() + (label * 37) % 255);
+            } else {
+                colors.emplace_back(Eigen::Vector3d{128.0 / 256.0, 0, 0});
+            }
+        });
+        check_pcd_->colors_ = colors;
+        sensor_msgs::PointCloud2 check_pub_cloud;
+        open3d_conversions::open3dToRos(*check_pcd_, check_pub_cloud, child_frame_);
+        check_points_publisher_.publish((check_pub_cloud));
+        if (clusters_count.empty()) {
+            ROS_WARN("NOT ENOUGH CLUSTERS FOR LOCALISATION");
+        } else if (clusters_count.size() == 1) {
+            // TODO:: for one cluster implement something
+        } else {
+            // TODO:: mpore than once define some metric
+        }
+        // maybe also remove the outliers
+        check_pose_ = t_current;
+    }
 
     // Broadcast the tf
     geometry_msgs::TransformStamped transform_msg;

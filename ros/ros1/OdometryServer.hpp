@@ -22,7 +22,11 @@
 // SOFTWARE.
 #pragma once
 
+#include <open3d/Open3D.h>
+#include <open3d/geometry/PointCloud.h>
 // KISS-ICP
+#include <memory>
+
 #include "kiss_icp/SaveTrajectory.h"
 #include "kiss_icp/pipeline/KissICP.hpp"
 // ROS
@@ -65,6 +69,7 @@ private:
     ros::Publisher kpoints_publisher_;
     ros::Publisher local_map_publisher_;
     ros::ServiceServer save_traj_srv_;
+    ros::Publisher check_points_publisher_;
 
     /// KISS-ICP
     kiss_icp::pipeline::KissICP odometry_;
@@ -73,6 +78,11 @@ private:
     /// Global/map coordinate frame.
     std::string odom_frame_{"odom"};
     std::string child_frame_{"base_link"};
+
+    // to check map conssistency
+    std::shared_ptr<open3d::geometry::PointCloud> check_pcd_ =
+        std::make_shared<open3d::geometry::PointCloud>();
+    Eigen::Vector3d check_pose_;
 };
 
 }  // namespace kiss_icp_ros

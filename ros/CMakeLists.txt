@@ -68,9 +68,7 @@ elseif("$ENV{ROS_VERSION}" STREQUAL "2")
 
   find_package(ament_cmake REQUIRED)
   find_package(nav_msgs REQUIRED)
-  find_package(rcutils REQUIRED)
   find_package(rclcpp REQUIRED)
-  find_package(rclcpp_components REQUIRED)
   find_package(sensor_msgs REQUIRED)
   find_package(tf2_ros REQUIRED)
 
