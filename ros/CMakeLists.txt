@@ -21,30 +21,21 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 cmake_minimum_required(VERSION 3.16...3.26)
-project(
-  kiss_icp
-  VERSION 0.2.9
-  LANGUAGES CXX)
+project(kiss_icp VERSION 0.2.9 LANGUAGES CXX)
 
 set(ignore ${CATKIN_INSTALL_INTO_PREFIX_ROOT})
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../cpp/kiss_icp/)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../cpp/kiss_icp
-                   ${CMAKE_CURRENT_BINARY_DIR}/kiss_icp)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../cpp/kiss_icp ${CMAKE_CURRENT_BINARY_DIR}/kiss_icp)
 else()
   cmake_minimum_required(VERSION 3.18)
-  message(
-    STATUS
-      "Performing out-of-tree build, fetching KISS-ICP v${CMAKE_PROJECT_VERSION} Release from Github"
-  )
+  message(STATUS "Performing out-of-tree build, fetching KISS-ICP v${CMAKE_PROJECT_VERSION} Release from Github")
   include(FetchContent)
   FetchContent_Declare(
-    ext_kiss_icp_core
-    PREFIX kiss_icp_core
-    URL https://github.com/PRBonn/kiss-icp/archive/refs/tags/v${CMAKE_PROJECT_VERSION}.tar.gz
-        SOURCE_SUBDIR
+    ext_kiss_icp_core PREFIX kiss_icp_core
+    URL https://github.com/PRBonn/kiss-icp/archive/refs/tags/v${CMAKE_PROJECT_VERSION}.tar.gz SOURCE_SUBDIR
         cpp/kiss_icp)
   FetchContent_MakeAvailable(ext_kiss_icp_core)
 endif()
@@ -70,18 +61,9 @@ if("$ENV{ROS_VERSION}" STREQUAL "1")
   find_package(Open3D REQUIRED)
   # ROS1 node
   add_executable(odometry_node ros1/OdometryServer.cpp)
-<<<<<<< Updated upstream
   target_include_directories(odometry_node PUBLIC include ${catkin_INCLUDE_DIRS})
   target_link_libraries(odometry_node kiss_icp::pipeline ${catkin_LIBRARIES} Open3D::Open3D)
   install(TARGETS odometry_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
-=======
-  target_include_directories(odometry_node PUBLIC include
-                                                  ${catkin_INCLUDE_DIRS})
-  target_link_libraries(odometry_node kiss_icp::pipeline ${catkin_LIBRARIES}
-                        Open3D::Open3D )
-  install(TARGETS odometry_node
-          RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
->>>>>>> Stashed changes
   install(DIRECTORY launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 elseif("$ENV{ROS_VERSION}" STREQUAL "2")
   message(STATUS "KISS-ICP-ROS2 wrapper will be compiled")
@@ -109,8 +91,7 @@ elseif("$ENV{ROS_VERSION}" STREQUAL "2")
 
   install(TARGETS odometry_component LIBRARY DESTINATION lib RUNTIME DESTINATION lib/${PROJECT_NAME})
   add_executable(odometry_node ros2/OdometryServer.cpp)
-  target_include_directories(odometry_node
-                             PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_include_directories(odometry_node PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(odometry_node kiss_icp::pipeline)
   install(TARGETS odometry_node RUNTIME DESTINATION lib/${PROJECT_NAME})
   install(DIRECTORY launch rviz DESTINATION share/${PROJECT_NAME}/)
