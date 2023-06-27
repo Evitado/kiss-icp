@@ -45,6 +45,7 @@
 #include "ros/init.h"
 #include "ros/node_handle.h"
 #include "ros/ros.h"
+#include "ros/service_client.h"
 #include "sensor_msgs/PointCloud2.h"
 #include "tf2_ros/static_transform_broadcaster.h"
 #include "tf2_ros/transform_broadcaster.h"
@@ -75,10 +76,6 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     // Construct the main KISS-ICP odometry node
     odometry_ = kiss_icp::pipeline::KissICP(config_);
 
-    // Initialize subscribers
-    pointcloud_sub_ = nh_.subscribe<const sensor_msgs::PointCloud2 &>(
-        "pointcloud_topic", queue_size_, &OdometryServer::RegisterFrame, this);
-
     // Initialize publishers
     odom_publisher_ = pnh_.advertise<nav_msgs::Odometry>("odometry", queue_size_);
     frame_publisher_ = pnh_.advertise<sensor_msgs::PointCloud2>("frame", queue_size_);
@@ -90,30 +87,33 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     path_msg_.header.frame_id = odom_frame_;
     traj_publisher_ = pnh_.advertise<nav_msgs::Path>("trajectory", queue_size_);
 
+    // Initialize subscribers
+    pointcloud_sub_ = nh_.subscribe<const sensor_msgs::PointCloud2 &>(
+        "pointcloud_topic", queue_size_, &OdometryServer::RegisterFrame, this);
     // Advertise save service
     save_traj_srv_ = pnh_.advertiseService("SaveTrajectory", &OdometryServer::SaveTrajectory, this);
 
-    // Broadcast a static transformation that links with identity the specified base link to the
-    // pointcloud_frame, basically to always be able to visualize the frame in rviz
-
-    // if (child_frame_ != "base_link") {
-    // static tf2_ros::StaticTransformBroadcaster br;
-    // geometry_msgs::TransformStamped alias_transform_msg;
-    // alias_transform_msg.header.stamp = ros::Time::now();
-    // alias_transform_msg.transform.translation.x = 0.0;
-    // alias_transform_msg.transform.translation.y = 0.0;
-    // alias_transform_msg.transform.translation.z = 0.0;
-    // alias_transform_msg.transform.rotation.x = 0.0;
-    // alias_transform_msg.transform.rotation.y = 0.0;
-    // alias_transform_msg.transform.rotation.z = 0.0;
-    // alias_transform_msg.transform.rotation.w = 1.0;
-    // alias_transform_msg.header.frame_id = child_frame_;
-    // alias_transform_msg.child_frame_id = "base_link";
-    // br.sendTransform(alias_transform_msg);
-    //}
-
     // publish odometry msg
     ROS_INFO("KISS-ICP ROS 1 Odometry Node Initialized");
+}
+
+bool OdometryServer::FailStateRecogntion() {
+    auto labels = check_pcd_->ClusterDBSCAN(cluster_density_, cluster_min_points_);
+    std::vector<Eigen::Vector3d> colors;
+    std::map<int, int> clusters_count;
+    std::for_each(labels.cbegin(), labels.cend(), [&](int label) {
+        if (label >= 0) {
+            clusters_count[label]++;
+            colors.emplace_back(Eigen::Vector3d{0, 0, 0}.array() + (label * 37) % 255);
+        } else {
+            colors.emplace_back(Eigen::Vector3d{128.0 / 256.0, 0, 0});
+        }
+    });
+    check_pcd_->colors_ = colors;
+    sensor_msgs::PointCloud2 check_pub_cloud;
+    open3d_conversions::open3dToRos(*check_pcd_, check_pub_cloud, child_frame_);
+    check_points_publisher_.publish((check_pub_cloud));
+    return clusters_count.empty();
 }
 
 void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
@@ -133,30 +133,19 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     const Eigen::Vector3d t_current = pose.translation();
     const Eigen::Quaterniond q_current = pose.unit_quaternion();
 
-    // check once only for a movement of certain distance
-    if (fail_state_on_ && ((check_pose_ - t_current).norm() > cluster_run_after_distance_)) {
-        check_pcd_->points_ = keypoints;
-        // eps, min_points
-        auto labels = check_pcd_->ClusterDBSCAN(cluster_density_, cluster_min_points_);
-        std::vector<Eigen::Vector3d> colors;
-        std::map<int, int> clusters_count;
-        std::for_each(labels.cbegin(), labels.cend(), [&](int label) {
-            if (label >= 0) {
-                clusters_count[label]++;
-                colors.emplace_back(Eigen::Vector3d{0, 0, 0}.array() + (label * 37) % 255);
-            } else {
-                colors.emplace_back(Eigen::Vector3d{128.0 / 256.0, 0, 0});
-            }
-        });
-        check_pcd_->colors_ = colors;
-        sensor_msgs::PointCloud2 check_pub_cloud;
-        open3d_conversions::open3dToRos(*check_pcd_, check_pub_cloud, child_frame_);
-        check_points_publisher_.publish((check_pub_cloud));
-        if (clusters_count.empty()) {
-            ROS_WARN("NOT ENOUGH CLUSTERS FOR LOCALISATION");
+    if (fail_state_on_) {
+        if (first_frame_) {
+            check_pcd_->points_ = keypoints;
+            fail_state_ = FailStateRecogntion();
+            check_pose_ = t_current;
+            first_frame_ = false;
         }
-
-        check_pose_ = t_current;
+        // check once only for a movement of certain distance
+        if (((check_pose_ - t_current).norm() > cluster_run_after_distance_)) {
+            check_pcd_->points_ = keypoints;
+            fail_state_ = FailStateRecogntion();
+            check_pose_ = t_current;
+        }
     }
 
     // Broadcast the tf

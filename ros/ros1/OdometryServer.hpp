@@ -49,6 +49,7 @@ private:
     void RegisterFrame(const sensor_msgs::PointCloud2 &msg);
     bool SaveTrajectory(kiss_icp::SaveTrajectory::Request &path,
                         kiss_icp::SaveTrajectory::Response &response);
+    bool FailStateRecogntion();
 
     /// Ros node stuff
     ros::NodeHandle nh_;
@@ -70,7 +71,9 @@ private:
     ros::Publisher local_map_publisher_;
     ros::ServiceServer save_traj_srv_;
     ros::Publisher check_points_publisher_;
-
+    // mapping service clients
+    ros::ServiceClient mapping_stop_cli_;
+    ros::ServiceClient mapping_start_cli_;
     /// KISS-ICP
     kiss_icp::pipeline::KissICP odometry_;
     kiss_icp::pipeline::KISSConfig config_;
@@ -89,6 +92,10 @@ private:
     double cluster_run_after_distance_ = 2.0;
     int cluster_min_points_ = 30;
     bool fail_state_on_ = false;
+    bool mapping_is_on_ = false;
+    bool first_frame_ = true;
+    // by default no fail state
+    bool fail_state_ = false;
 };
 
 }  // namespace kiss_icp_ros
