@@ -38,6 +38,8 @@
 #include "kiss_icp/pipeline/KissICP.hpp"
 
 // ROS
+#include <evitado_msgs/Trigger.h>
+
 #include "geometry_msgs/PoseStamped.h"
 #include "geometry_msgs/TransformStamped.h"
 #include "nav_msgs/Odometry.h"
@@ -46,7 +48,10 @@
 #include "ros/node_handle.h"
 #include "ros/ros.h"
 #include "ros/service_client.h"
+#include "ros/subscriber.h"
 #include "sensor_msgs/PointCloud2.h"
+#include "std_srvs/Empty.h"
+#include "std_srvs/Trigger.h"
 #include "tf2_ros/static_transform_broadcaster.h"
 #include "tf2_ros/transform_broadcaster.h"
 
@@ -90,8 +95,14 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     // Initialize subscribers
     pointcloud_sub_ = nh_.subscribe<const sensor_msgs::PointCloud2 &>(
         "pointcloud_topic", queue_size_, &OdometryServer::RegisterFrame, this);
+    // mapping_is_on_sub_ =
+    // nh_.subscribe<bool>("mapping", queue_size_, &OdometryServer::MappingOn, this);
     // Advertise save service
     save_traj_srv_ = pnh_.advertiseService("SaveTrajectory", &OdometryServer::SaveTrajectory, this);
+
+    // Mapping services
+    mapping_start_cli_ = nh_.serviceClient<evitado_msgs::Trigger>("start_mapping");
+    mapping_stop_cli_ = nh_.serviceClient<std_srvs::Empty>("stop_mapping");
 
     // publish odometry msg
     ROS_INFO("KISS-ICP ROS 1 Odometry Node Initialized");
@@ -133,6 +144,7 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     const Eigen::Vector3d t_current = pose.translation();
     const Eigen::Quaterniond q_current = pose.unit_quaternion();
 
+    // check fail_state
     if (fail_state_on_) {
         if (first_frame_) {
             check_pcd_->points_ = keypoints;
@@ -140,11 +152,29 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
             check_pose_ = t_current;
             first_frame_ = false;
         }
-        // check once only for a movement of certain distance
         if (((check_pose_ - t_current).norm() > cluster_run_after_distance_)) {
             check_pcd_->points_ = keypoints;
             fail_state_ = FailStateRecogntion();
             check_pose_ = t_current;
+        }
+    }
+
+    // if fail state is true stop mapping
+    if (fail_state_ && mapping_is_on_) {
+        std_srvs::Empty stop_map_trigger;
+        if (!mapping_stop_cli_.call(stop_map_trigger)) {
+            ROS_ERROR("Fail state realised and mapping not stopped");
+        }
+        first_frame_ = true;
+        odometry_.Restart();
+    } else {
+        if (!mapping_is_on_) {
+            // if mappig not on start it
+            evitado_msgs::Trigger srv;
+            srv.request.aircraft_changed = true;
+            if (!mapping_start_cli_.call(srv)) {
+                ROS_WARN("No Fail State Recogntion unable to restart mapping");
+            }
         }
     }
 

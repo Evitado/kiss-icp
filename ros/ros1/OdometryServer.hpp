@@ -34,6 +34,7 @@
 #include "ros/ros.h"
 #include "ros/service_client.h"
 #include "ros/service_server.h"
+#include "ros/subscriber.h"
 #include "sensor_msgs/PointCloud2.h"
 #include "tf2_ros/transform_broadcaster.h"
 
@@ -50,6 +51,7 @@ private:
     bool SaveTrajectory(kiss_icp::SaveTrajectory::Request &path,
                         kiss_icp::SaveTrajectory::Response &response);
     bool FailStateRecogntion();
+    void MappingOn(bool mapping_is_on) { mapping_is_on_ = mapping_is_on; }
 
     /// Ros node stuff
     ros::NodeHandle nh_;
@@ -61,6 +63,7 @@ private:
 
     /// Data subscribers.
     ros::Subscriber pointcloud_sub_;
+    ros::Subscriber mapping_is_on_sub_;
 
     /// Data publishers.
     ros::Publisher odom_publisher_;
@@ -88,13 +91,13 @@ private:
     Eigen::Vector3d check_pose_;
 
     // Clusters
+    int cluster_min_points_ = 30;
     double cluster_density_ = 3.0;
     double cluster_run_after_distance_ = 2.0;
-    int cluster_min_points_ = 30;
+
     bool fail_state_on_ = false;
     bool mapping_is_on_ = false;
     bool first_frame_ = true;
-    // by default no fail state
     bool fail_state_ = false;
 };
 
