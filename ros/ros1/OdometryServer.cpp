@@ -159,22 +159,28 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
             check_pose_ = t_current;
         }
     }
-
     // if fail state is true stop mapping
-    if (fail_state_ && mapping_is_on_) {
-        std_srvs::Empty stop_map_trigger;
-        if (!mapping_stop_cli_.call(stop_map_trigger)) {
-            ROS_ERROR("Fail state realised and mapping not stopped");
+    if (fail_state_) {
+        // if mappig on turn it off
+        if (mapping_is_on_) {
+            std_srvs::Empty stop_map_trigger;
+            if (mapping_stop_cli_.call(stop_map_trigger)) {
+                ROS_WARN("Stopped Mapping .................!");
+            } else {
+                ROS_ERROR("Fail state realised and mapping not stopped");
+            }
+            first_frame_ = true;
+            odometry_.Restart();
         }
-        first_frame_ = true;
-        odometry_.Restart();
     } else {
+        // if mappig not on start it
         if (!mapping_is_on_) {
-            // if mappig not on start it
             evitado_msgs::Trigger srv;
             srv.request.aircraft_changed = true;
-            if (!mapping_start_cli_.call(srv)) {
-                ROS_WARN("Odommetry is possible but unable to restart mapping");
+            if (mapping_start_cli_.call(srv)) {
+                ROS_INFO("Started Mapping ..............!");
+            } else {
+                ROS_WARN("Odommetry available but unable to restart mapping");
             }
         }
     }
