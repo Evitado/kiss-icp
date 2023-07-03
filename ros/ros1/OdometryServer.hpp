@@ -36,6 +36,7 @@
 #include "ros/service_server.h"
 #include "ros/subscriber.h"
 #include "sensor_msgs/PointCloud2.h"
+#include "std_msgs/Bool.h"
 #include "tf2_ros/transform_broadcaster.h"
 
 namespace kiss_icp_ros {
@@ -51,7 +52,7 @@ private:
     bool SaveTrajectory(kiss_icp::SaveTrajectory::Request &path,
                         kiss_icp::SaveTrajectory::Response &response);
     bool FailStateRecogntion();
-    void MappingOn(bool mapping_is_on) { mapping_is_on_ = mapping_is_on; }
+    void MappingOn(const std_msgs::Bool mapping_is_on) { mapping_is_on_ = mapping_is_on.data; }
 
     /// Ros node stuff
     ros::NodeHandle nh_;

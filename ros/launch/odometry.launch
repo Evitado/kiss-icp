@@ -5,7 +5,9 @@
   <arg name="visualize" default="true" />
   <arg name="odom_frame" default="odom" />
   <arg name="child_frame" default="base_footprint_tug" />
-  <arg name="topic" default="" />
+  <arg name="topic" default="/main/ac_filtered_points"/>
+  <arg name="mapping_start_service" default="/evitado_vdb_mapping/start_mapping" />
+  <arg name="mapping_stop_service" default="/evitado_vdb_mapping/stop_mapping"/>
 
   <!-- KISS-ICP paramaters -->
   <arg name="deskew" default="false" />
@@ -23,6 +25,8 @@
   <node pkg="kiss_icp" type="odometry_node" name="odometry_node" output="screen">
     <!-- ROS params -->
     <remap from="pointcloud_topic" to="$(arg topic)" />
+    <remap from="mapping_start_service" to="$(arg mapping_start_service)" />
+    <remap from="mapping_stop_service" to="$(arg mapping_stop_service)" />
     <param name="odom_frame" value="$(arg odom_frame)" />
     <param name="child_frame" value="$(arg child_frame)" />
     <!-- KISS-ICP params -->

@@ -50,6 +50,7 @@
 #include "ros/service_client.h"
 #include "ros/subscriber.h"
 #include "sensor_msgs/PointCloud2.h"
+#include "std_msgs/Bool.h"
 #include "std_srvs/Empty.h"
 #include "std_srvs/Trigger.h"
 #include "tf2_ros/static_transform_broadcaster.h"
@@ -95,14 +96,14 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     // Initialize subscribers
     pointcloud_sub_ = nh_.subscribe<const sensor_msgs::PointCloud2 &>(
         "pointcloud_topic", queue_size_, &OdometryServer::RegisterFrame, this);
-    // mapping_is_on_sub_ =
-    // nh_.subscribe<bool>("mapping", queue_size_, &OdometryServer::MappingOn, this);
+    mapping_is_on_sub_ = nh_.subscribe<const std_msgs::Bool>("mapping_active", queue_size_,
+                                                             &OdometryServer::MappingOn, this);
     // Advertise save service
     save_traj_srv_ = pnh_.advertiseService("SaveTrajectory", &OdometryServer::SaveTrajectory, this);
 
     // Mapping services
-    mapping_start_cli_ = nh_.serviceClient<evitado_msgs::Trigger>("start_mapping");
-    mapping_stop_cli_ = nh_.serviceClient<std_srvs::Empty>("stop_mapping");
+    mapping_start_cli_ = nh_.serviceClient<evitado_msgs::Trigger>("mapping_start_service");
+    mapping_stop_cli_ = nh_.serviceClient<std_srvs::Empty>("mapping_stop_service");
 
     // publish odometry msg
     ROS_INFO("KISS-ICP ROS 1 Odometry Node Initialized");
@@ -173,7 +174,7 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
             evitado_msgs::Trigger srv;
             srv.request.aircraft_changed = true;
             if (!mapping_start_cli_.call(srv)) {
-                ROS_WARN("No Fail State Recogntion unable to restart mapping");
+                ROS_WARN("Odommetry is possible but unable to restart mapping");
             }
         }
     }
