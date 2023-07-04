@@ -96,7 +96,7 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     // Initialize subscribers
     pointcloud_sub_ = nh_.subscribe<const sensor_msgs::PointCloud2 &>(
         "pointcloud_topic", queue_size_, &OdometryServer::RegisterFrame, this);
-    mapping_is_on_sub_ = nh_.subscribe<const std_msgs::Bool>("mapping_active", queue_size_,
+    mapping_is_on_sub_ = nh_.subscribe<const std_msgs::Bool>("mapping_active_topic", queue_size_,
                                                              &OdometryServer::MappingOn, this);
     // Advertise save service
     save_traj_srv_ = pnh_.advertiseService("SaveTrajectory", &OdometryServer::SaveTrajectory, this);
@@ -165,7 +165,7 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
         if (mapping_is_on_) {
             std_srvs::Empty stop_map_trigger;
             if (mapping_stop_cli_.call(stop_map_trigger)) {
-                ROS_WARN("Stopped Mapping .................!");
+                ROS_WARN("Fail state realised and Stopped Mapping .................!");
             } else {
                 ROS_ERROR("Fail state realised and mapping not stopped");
             }
@@ -178,7 +178,7 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
             evitado_msgs::Trigger srv;
             srv.request.aircraft_changed = true;
             if (mapping_start_cli_.call(srv)) {
-                ROS_INFO("Started Mapping ..............!");
+                ROS_INFO("Odometry available and Started Mapping ..............!");
             } else {
                 ROS_WARN("Odommetry available but unable to restart mapping");
             }
