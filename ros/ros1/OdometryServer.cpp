@@ -170,7 +170,8 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
                 ROS_ERROR("Fail state realised and mapping not stopped");
             }
             first_frame_ = true;
-            odometry_.Restart();
+            odometry_.Reset();
+            path_msg_.poses.clear();
         }
     } else {
         // if mappig not on start it

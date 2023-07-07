@@ -72,7 +72,7 @@ public:
     // Extra C++ API to facilitate ROS debugging
     std::vector<Eigen::Vector3d> LocalMap() const { return local_map_.Pointcloud(); };
     std::vector<Sophus::SE3d> poses() const { return poses_; };
-    void Restart() {
+    void Reset() {
         local_map_.Clear();
         poses_.clear();
     }
