@@ -6,9 +6,6 @@
   <arg name="odom_frame" default="odom" />
   <arg name="child_frame" default="base_footprint_tug" />
   <arg name="topic" default="/main/ac_filtered_points"/>
-  <arg name="mapping_start_service" default="/main/ohm_mapping/start_mapping" />
-  <arg name="mapping_stop_service" default="/main/ohm_mapping/stop_mapping" />
-  <arg name="mapping_active_topic" default="/main/mapping_active" />
   <!-- KISS-ICP paramaters -->
   <arg name="deskew" default="false" />
   <arg name="max_range" default="100.0" />
@@ -20,17 +17,23 @@
   <arg name="cluster_min_points" default="30" />
   <arg name="cluster_run_after_distance" default="2.0" />
 
+    <!-- Mapping topics paramaters -->
+  <arg name="mapping_start_service" default="/main/ohm_mapping/start_mapping" />
+  <arg name="mapping_stop_service" default="/main/ohm_mapping/stop_mapping" />
+  <arg name="mapping_active_topic" default="/main/mapping_active" />
 
   <!-- Odometry node -->
   <node pkg="kiss_icp" type="odometry_node" name="odometry_node" output="screen">
     <!-- ROS params -->
     <remap from="pointcloud_topic" to="$(arg topic)" />
+    <param name="odom_frame" value="$(arg odom_frame)" />
+    <param name="child_frame" value="$(arg child_frame)" />
+    
+    <!-- Mapping topics params -->
     <remap from="mapping_start_service" to="$(arg mapping_start_service)" />
     <remap from="mapping_stop_service" to="$(arg mapping_stop_service)" />
     <remap from="mapping_active_topic" to="$(arg mapping_active_topic)" />
 
-    <param name="odom_frame" value="$(arg odom_frame)" />
-    <param name="child_frame" value="$(arg child_frame)" />
     <!-- KISS-ICP params -->
     <param name="max_range" value="$(arg max_range)" />
     <param name="min_range" value="$(arg min_range)" />
@@ -39,6 +42,7 @@
     <param name="max_points_per_voxel" value="20" />
     <param name="initial_threshold" value="2.0" />
     <param name="min_motion_th" value="0.1" />
+    
     <!-- FAIL-STATE paramaters -->
     <param name="fail_state_on" value="true" />
     <param name="cluster_density" value="$(arg cluster_density)" />
