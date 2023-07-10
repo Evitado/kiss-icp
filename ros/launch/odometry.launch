@@ -23,7 +23,7 @@
   <arg name="mapping_active_topic" default="/main/mapping_active" />
 
   <!-- Odometry node -->
-  <node pkg="kiss_icp" type="odometry_node" name="odometry_node" output="screen">
+  <node pkg="kiss_icp" type="odometry_node" name="lidar_odometry" output="screen">
     <!-- ROS params -->
     <remap from="pointcloud_topic" to="$(arg topic)" />
     <param name="odom_frame" value="$(arg odom_frame)" />

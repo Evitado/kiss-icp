@@ -105,8 +105,30 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     mapping_start_cli_ = nh_.serviceClient<evitado_msgs::Trigger>("mapping_start_service");
     mapping_stop_cli_ = nh_.serviceClient<std_srvs::Empty>("mapping_stop_service");
 
+    start_lio_service_ = pnh_.advertiseService("start_lidar_odom", &OdometryServer::startLIO, this);
+    stop_lio_service_  = pnh_.advertiseService("stop_lidar_odom", &OdometryServer::stopLIO, this);
+
     // publish odometry msg
     ROS_INFO("KISS-ICP ROS 1 Odometry Node Initialized");
+}
+
+bool OdometryServer::startLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
+{
+  // Those locks are maybe a bit to over protective
+  mutex_.lock();
+  first_frame_ = true;
+  odometry_.Reset();
+  path_msg_.poses.clear();
+  mutex_.unlock();
+
+  lidar_odom_ = true;
+  return true;
+}
+
+bool OdometryServer::stopLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
+{
+  lidar_odom_ = false;
+  return true;
 }
 
 bool OdometryServer::FailStateRecogntion() {
@@ -129,17 +151,21 @@ bool OdometryServer::FailStateRecogntion() {
 }
 
 void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
+    if (!lidar_odom_) return;
+
     const auto points = utils::PointCloud2ToEigen(msg);
     const auto timestamps = [&]() -> std::vector<double> {
         if (!config_.deskew) return {};
         return utils::GetTimestamps(msg);
     }();
 
+    mutex_.lock();
     // Register frame, main entry point to KISS-ICP pipeline
     const auto &[frame, keypoints] = odometry_.RegisterFrame(points, timestamps);
 
     //  PublishPose
     const auto pose = odometry_.poses().back();
+    mutex_.unlock();
 
     // Convert from Eigen to ROS types
     const Eigen::Vector3d t_current = pose.translation();
@@ -147,12 +173,14 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
 
     // check fail_state
     if (fail_state_on_) {
+        mutex_.lock();
         if (first_frame_) {
             check_pcd_->points_ = keypoints;
             fail_state_ = FailStateRecogntion();
             check_pose_ = t_current;
             first_frame_ = false;
         }
+        mutex_.unlock();
         if (((check_pose_ - t_current).norm() > cluster_run_after_distance_)) {
             check_pcd_->points_ = keypoints;
             fail_state_ = FailStateRecogntion();
@@ -169,9 +197,11 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
             } else {
                 ROS_ERROR("Fail state realised and mapping not stopped");
             }
+            mutex_.lock();
             first_frame_ = true;
             odometry_.Reset();
             path_msg_.poses.clear();
+            mutex_.unlock();
         }
     } else {
         // if mappig not on start it
@@ -218,8 +248,10 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     geometry_msgs::PoseStamped pose_msg;
     pose_msg.pose = odom_msg.pose.pose;
     pose_msg.header = odom_msg.header;
+    mutex_.lock();
     path_msg_.poses.push_back(pose_msg);
     traj_publisher_.publish(path_msg_);
+    mutex_.unlock();
 
     // Publish KISS-ICP internal data, just for debugging
     std_msgs::Header frame_header = msg.header;
@@ -228,9 +260,11 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     kpoints_publisher_.publish(utils::EigenToPointCloud2(keypoints, frame_header));
 
     // Map is referenced to the odometry_frame
+    mutex_.lock();
     std_msgs::Header local_map_header = msg.header;
     local_map_header.frame_id = odom_frame_;
     local_map_publisher_.publish(utils::EigenToPointCloud2(odometry_.LocalMap(), local_map_header));
+    mutex_.unlock();
 }
 
 bool OdometryServer::SaveTrajectory(kiss_icp::SaveTrajectory::Request &path,
@@ -239,6 +273,7 @@ bool OdometryServer::SaveTrajectory(kiss_icp::SaveTrajectory::Request &path,
     std::string tumpath = path.path + "_tum.txt";
     std::ofstream out_tum(tumpath);
     std::ofstream out_kitti(kittipath);
+    mutex_.lock();
     for (const auto &pose : path_msg_.poses) {
         const auto &t = pose.pose.position;
         const auto &q = pose.pose.orientation;
@@ -255,6 +290,7 @@ bool OdometryServer::SaveTrajectory(kiss_icp::SaveTrajectory::Request &path,
                   << " " << t.y << " " << R(2, 0) << " " << R(2, 1) << " " << R(2, 2) << " " << t.z
                   << "\n";
     }
+    mutex_.unlock();
     ROS_INFO("Saved Trajectory");
     return true;
 }

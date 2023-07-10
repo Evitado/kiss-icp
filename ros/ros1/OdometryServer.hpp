@@ -34,6 +34,7 @@
 #include "ros/ros.h"
 #include "ros/service_client.h"
 #include "ros/service_server.h"
+#include <std_srvs/Empty.h>
 #include "ros/subscriber.h"
 #include "sensor_msgs/PointCloud2.h"
 #include "std_msgs/Bool.h"
@@ -53,6 +54,8 @@ private:
                         kiss_icp::SaveTrajectory::Response &response);
     bool FailStateRecogntion();
     void MappingOn(const std_msgs::Bool mapping_is_on) { mapping_is_on_ = mapping_is_on.data; }
+    bool startLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
+    bool stopLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
 
     /// Ros node stuff
     ros::NodeHandle nh_;
@@ -65,6 +68,7 @@ private:
     /// Data subscribers.
     ros::Subscriber pointcloud_sub_;
     ros::Subscriber mapping_is_on_sub_;
+    std::mutex mutex_;
 
     /// Data publishers.
     ros::Publisher odom_publisher_;
@@ -75,9 +79,15 @@ private:
     ros::Publisher local_map_publisher_;
     ros::ServiceServer save_traj_srv_;
     ros::Publisher check_points_publisher_;
+
     // mapping service clients
     ros::ServiceClient mapping_stop_cli_;
     ros::ServiceClient mapping_start_cli_;
+
+    // services
+    ros::ServiceServer start_lio_service_;
+    ros::ServiceServer stop_lio_service_;
+
     /// KISS-ICP
     kiss_icp::pipeline::KissICP odometry_;
     kiss_icp::pipeline::KISSConfig config_;
@@ -96,10 +106,11 @@ private:
     double cluster_density_ = 3.0;
     double cluster_run_after_distance_ = 2.0;
 
+    bool lidar_odom_    = false;
     bool fail_state_on_ = false;
     bool mapping_is_on_ = false;
-    bool first_frame_ = true;
-    bool fail_state_ = false;
+    bool first_frame_   = true;
+    bool fail_state_    = false;
 };
 
 }  // namespace kiss_icp_ros
