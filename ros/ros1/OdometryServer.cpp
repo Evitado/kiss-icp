@@ -121,12 +121,27 @@ bool OdometryServer::startLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Re
   path_msg_.poses.clear();
   mutex_.unlock();
 
+  evitado_msgs::Trigger srv;
+  srv.request.aircraft_changed = true;
+  if (mapping_start_cli_.call(srv)) {
+    ROS_INFO("Odometry available and Started Mapping ..............!");
+  } else {
+    ROS_WARN("Odommetry available but unable to restart mapping");
+  }
+
   lidar_odom_ = true;
   return true;
 }
 
 bool OdometryServer::stopLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
 {
+  std_srvs::Empty stop_map_trigger;
+  if (mapping_stop_cli_.call(stop_map_trigger)) {
+    ROS_WARN("Odometry stopped. Stopping mapping");
+  } else {
+    ROS_ERROR("Unable to stop mapping.");
+  }
+
   lidar_odom_ = false;
   return true;
 }
