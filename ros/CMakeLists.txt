@@ -53,7 +53,9 @@ if("$ENV{ROS_VERSION}" STREQUAL "1")
                tf2
                tf2_ros
                open3d_conversions
-               genmsg)
+               genmsg
+               evitado_msgs
+               )
   add_service_files(FILES SaveTrajectory.srv)
   generate_messages(DEPENDENCIES std_msgs)
   catkin_package()

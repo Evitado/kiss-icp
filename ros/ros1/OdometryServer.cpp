@@ -38,6 +38,8 @@
 #include "kiss_icp/pipeline/KissICP.hpp"
 
 // ROS
+#include <evitado_msgs/Trigger.h>
+
 #include "geometry_msgs/PoseStamped.h"
 #include "geometry_msgs/TransformStamped.h"
 #include "nav_msgs/Odometry.h"
@@ -46,7 +48,11 @@
 #include "ros/node_handle.h"
 #include "ros/ros.h"
 #include "ros/service_client.h"
+#include "ros/subscriber.h"
 #include "sensor_msgs/PointCloud2.h"
+#include "std_msgs/Bool.h"
+#include "std_srvs/Empty.h"
+#include "std_srvs/Trigger.h"
 #include "tf2_ros/static_transform_broadcaster.h"
 #include "tf2_ros/transform_broadcaster.h"
 
@@ -90,11 +96,61 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     // Initialize subscribers
     pointcloud_sub_ = nh_.subscribe<const sensor_msgs::PointCloud2 &>(
         "pointcloud_topic", queue_size_, &OdometryServer::RegisterFrame, this);
+    mapping_is_on_sub_ = nh_.subscribe<const std_msgs::Bool>("mapping_active_topic", queue_size_,
+                                                             &OdometryServer::MappingOn, this);
     // Advertise save service
     save_traj_srv_ = pnh_.advertiseService("SaveTrajectory", &OdometryServer::SaveTrajectory, this);
 
+    // Mapping services
+    mapping_start_cli_ = nh_.serviceClient<evitado_msgs::Trigger>("ohm_mapping/start_mapping");
+    mapping_stop_cli_  = nh_.serviceClient<std_srvs::Empty>("ohm_mapping/stop_mapping");
+
+    ROS_INFO("Waiting for mapping services to come up...");
+    mapping_start_cli_.waitForExistence();
+    mapping_stop_cli_.waitForExistence();
+    ROS_INFO("Mapping services available");
+
+    start_lio_service_ = pnh_.advertiseService("start_lidar_odom", &OdometryServer::startLIO, this);
+    stop_lio_service_  = pnh_.advertiseService("stop_lidar_odom", &OdometryServer::stopLIO, this);
+
     // publish odometry msg
     ROS_INFO("KISS-ICP ROS 1 Odometry Node Initialized");
+}
+
+bool OdometryServer::startLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
+{
+  // Those locks are maybe a bit to over protective
+  mutex_.lock();
+  first_frame_ = true;
+  odometry_.Reset();
+  path_msg_.poses.clear();
+  mutex_.unlock();
+
+  /*
+  evitado_msgs::Trigger srv;
+  srv.request.aircraft_changed = true;
+  if (mapping_start_cli_.call(srv)) {
+    ROS_INFO("Odometry available and Started Mapping ..............!");
+  } else {
+    ROS_WARN("Odommetry available but unable to restart mapping");
+  }
+  */
+
+  lidar_odom_ = true;
+  return true;
+}
+
+bool OdometryServer::stopLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
+{
+  std_srvs::Empty stop_map_trigger;
+  if (mapping_stop_cli_.call(stop_map_trigger)) {
+    ROS_WARN("Odometry stopped. Stopping mapping");
+  } else {
+    ROS_ERROR("Unable to stop mapping.");
+  }
+
+  lidar_odom_ = false;
+  return true;
 }
 
 bool OdometryServer::FailStateRecogntion() {
@@ -117,30 +173,36 @@ bool OdometryServer::FailStateRecogntion() {
 }
 
 void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
+    if (!lidar_odom_) return;
+
     const auto points = utils::PointCloud2ToEigen(msg);
     const auto timestamps = [&]() -> std::vector<double> {
         if (!config_.deskew) return {};
         return utils::GetTimestamps(msg);
     }();
 
+    mutex_.lock();
     // Register frame, main entry point to KISS-ICP pipeline
     const auto &[frame, keypoints] = odometry_.RegisterFrame(points, timestamps);
 
     //  PublishPose
     const auto pose = odometry_.poses().back();
+    mutex_.unlock();
 
     // Convert from Eigen to ROS types
     const Eigen::Vector3d t_current = pose.translation();
     const Eigen::Quaterniond q_current = pose.unit_quaternion();
 
+    // check fail_state
     if (fail_state_on_) {
+        mutex_.lock();
         if (first_frame_) {
             check_pcd_->points_ = keypoints;
             fail_state_ = FailStateRecogntion();
             check_pose_ = t_current;
             first_frame_ = false;
         }
-        // check once only for a movement of certain distance
+        mutex_.unlock();
         if (((check_pose_ - t_current).norm() > cluster_run_after_distance_)) {
             check_pcd_->points_ = keypoints;
             fail_state_ = FailStateRecogntion();
@@ -180,8 +242,10 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     geometry_msgs::PoseStamped pose_msg;
     pose_msg.pose = odom_msg.pose.pose;
     pose_msg.header = odom_msg.header;
+    mutex_.lock();
     path_msg_.poses.push_back(pose_msg);
     traj_publisher_.publish(path_msg_);
+    mutex_.unlock();
 
     // Publish KISS-ICP internal data, just for debugging
     std_msgs::Header frame_header = msg.header;
@@ -190,9 +254,44 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     kpoints_publisher_.publish(utils::EigenToPointCloud2(keypoints, frame_header));
 
     // Map is referenced to the odometry_frame
+    mutex_.lock();
     std_msgs::Header local_map_header = msg.header;
     local_map_header.frame_id = odom_frame_;
     local_map_publisher_.publish(utils::EigenToPointCloud2(odometry_.LocalMap(), local_map_header));
+    mutex_.unlock();
+
+    // NOTE: this is after the transform broadcast to ensure it is available once mapping is started.
+    //       It might make sense to split start mapping from stopping to ensure that no eronious transforms are broadcast.
+
+    // if fail state is true stop mapping
+    if (fail_state_) {
+      // if mappig on turn it off
+      if (mapping_is_on_) {
+        std_srvs::Empty stop_map_trigger;
+        if (mapping_stop_cli_.call(stop_map_trigger)) {
+          ROS_WARN("Fail state realised and Stopped Mapping .................!");
+        } else {
+          ROS_ERROR("Fail state realised and mapping not stopped");
+        }
+
+        mutex_.lock();
+        first_frame_ = true;
+        odometry_.Reset();
+        path_msg_.poses.clear();
+        mutex_.unlock();
+      }
+    } else {
+      // if mappig not on start it
+      if (!mapping_is_on_) {
+        evitado_msgs::Trigger srv;
+        srv.request.aircraft_changed = true;
+        if (mapping_start_cli_.call(srv)) {
+          ROS_INFO("Odometry available and Started Mapping ..............!");
+        } else {
+          ROS_WARN("Odommetry available but unable to restart mapping");
+        }
+      }
+    }
 }
 
 bool OdometryServer::SaveTrajectory(kiss_icp::SaveTrajectory::Request &path,
@@ -201,6 +300,7 @@ bool OdometryServer::SaveTrajectory(kiss_icp::SaveTrajectory::Request &path,
     std::string tumpath = path.path + "_tum.txt";
     std::ofstream out_tum(tumpath);
     std::ofstream out_kitti(kittipath);
+    mutex_.lock();
     for (const auto &pose : path_msg_.poses) {
         const auto &t = pose.pose.position;
         const auto &q = pose.pose.orientation;
@@ -217,6 +317,7 @@ bool OdometryServer::SaveTrajectory(kiss_icp::SaveTrajectory::Request &path,
                   << " " << t.y << " " << R(2, 0) << " " << R(2, 1) << " " << R(2, 2) << " " << t.z
                   << "\n";
     }
+    mutex_.unlock();
     ROS_INFO("Saved Trajectory");
     return true;
 }
