@@ -7,10 +7,10 @@
   <arg name="child_frame" default="base_footprint_tug" />
   <arg name="topic" default="/main/ac_filtered_points"/>
   <!-- KISS-ICP paramaters -->
-  <arg name="deskew" default="false" />
+  <arg name="deskew" default="true" />
   <arg name="max_range" default="100.0" />
   <arg name="min_range" default="5.0" />
-  <arg name="voxel_size" default="" />
+  <arg name="voxel_size" default="0.2" />
 
   <!-- FAIL-STATE paramaters -->
   <arg name="cluster_density" default="3.0" />
@@ -28,7 +28,7 @@
     <remap from="pointcloud_topic" to="$(arg topic)" />
     <param name="odom_frame" value="$(arg odom_frame)" />
     <param name="child_frame" value="$(arg child_frame)" />
-    
+
     <!-- Mapping topics params -->
     <remap from="mapping_start_service" to="$(arg mapping_start_service)" />
     <remap from="mapping_stop_service" to="$(arg mapping_stop_service)" />
@@ -42,7 +42,7 @@
     <param name="max_points_per_voxel" value="20" />
     <param name="initial_threshold" value="2.0" />
     <param name="min_motion_th" value="0.1" />
-    
+
     <!-- FAIL-STATE paramaters -->
     <param name="fail_state_on" value="true" />
     <param name="cluster_density" value="$(arg cluster_density)" />
