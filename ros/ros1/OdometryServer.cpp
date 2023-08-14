@@ -102,8 +102,8 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     save_traj_srv_ = pnh_.advertiseService("SaveTrajectory", &OdometryServer::SaveTrajectory, this);
 
     // Mapping services
-    mapping_start_cli_ = nh_.serviceClient<evitado_msgs::Trigger>("ohm_mapping/start_mapping");
-    mapping_stop_cli_  = nh_.serviceClient<std_srvs::Empty>("ohm_mapping/stop_mapping");
+    mapping_start_cli_ = nh_.serviceClient<evitado_msgs::Trigger>("mapping_start_service");
+    mapping_stop_cli_  = nh_.serviceClient<std_srvs::Empty>("mapping_stop_service");
 
     ROS_INFO("Waiting for mapping services to come up...");
     mapping_start_cli_.waitForExistence();
