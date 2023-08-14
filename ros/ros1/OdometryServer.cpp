@@ -115,6 +115,9 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
 
     // publish odometry msg
     ROS_INFO("KISS-ICP ROS 1 Odometry Node Initialized");
+
+    //fail state
+    fail_state_array.reserve(10);
 }
 
 bool OdometryServer::startLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
@@ -137,6 +140,7 @@ bool OdometryServer::startLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Re
   */
 
   lidar_odom_ = true;
+  ROS_INFO("Starting Lidar Odometry ..............!");
   return true;
 }
 
@@ -153,7 +157,6 @@ bool OdometryServer::stopLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Res
   first_frame_ = true;
   return true;
 }
-
 bool OdometryServer::FailStateRecogntion() {
     auto labels = check_pcd_->ClusterDBSCAN(cluster_density_, cluster_min_points_);
     std::vector<Eigen::Vector3d> colors;
@@ -198,7 +201,7 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
         mutex_.lock();
         if (first_frame_) {
             check_pcd_->points_ = keypoints;
-            fail_state_ = FailStateRecogntion();
+            fail_state_array.push_back(FailStateRecogntion());
             check_pose_ = t_current;
         }
         mutex_.unlock();

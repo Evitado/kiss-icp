@@ -26,6 +26,7 @@
 #include <open3d/geometry/PointCloud.h>
 // KISS-ICP
 #include <memory>
+#include <vector>
 
 #include "kiss_icp/SaveTrajectory.h"
 #include "kiss_icp/pipeline/KissICP.hpp"
@@ -111,6 +112,7 @@ private:
     bool mapping_is_on_ = false;
     bool first_frame_   = true; //to run fail_state_ without checking for distance moved
     bool fail_state_    = false;
+    std::vector<bool> fail_state_array; // is check fail state on 10scans
 };
 
 }  // namespace kiss_icp_ros
