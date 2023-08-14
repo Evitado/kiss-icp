@@ -109,7 +109,7 @@ private:
     bool lidar_odom_    = false;
     bool fail_state_on_ = false;
     bool mapping_is_on_ = false;
-    bool first_frame_   = true;
+    bool first_frame_   = true; //to run fail_state_ without checking for distance moved
     bool fail_state_    = false;
 };
 
