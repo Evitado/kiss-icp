@@ -24,6 +24,7 @@
 
 #include <Eigen/Core>
 #include <algorithm>
+#include <numeric>
 #include <vector>
 
 #include "open3d_conversions/open3d_conversions.h"
@@ -103,7 +104,7 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
 
     // Mapping services
     mapping_start_cli_ = nh_.serviceClient<evitado_msgs::Trigger>("mapping_start_service");
-    mapping_stop_cli_  = nh_.serviceClient<std_srvs::Empty>("mapping_stop_service");
+    mapping_stop_cli_ = nh_.serviceClient<std_srvs::Empty>("mapping_stop_service");
 
     ROS_INFO("Waiting for mapping services to come up...");
     mapping_start_cli_.waitForExistence();
@@ -111,51 +112,49 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     ROS_INFO("Mapping services available");
 
     start_lio_service_ = pnh_.advertiseService("start_lidar_odom", &OdometryServer::startLIO, this);
-    stop_lio_service_  = pnh_.advertiseService("stop_lidar_odom", &OdometryServer::stopLIO, this);
+    stop_lio_service_ = pnh_.advertiseService("stop_lidar_odom", &OdometryServer::stopLIO, this);
 
     // publish odometry msg
     ROS_INFO("KISS-ICP ROS 1 Odometry Node Initialized");
 
-    //fail state
+    // fail state
     fail_state_array.reserve(10);
 }
 
-bool OdometryServer::startLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
-{
-  // Those locks are maybe a bit to over protective
-  mutex_.lock();
-  first_frame_ = true;
-  odometry_.Reset();
-  path_msg_.poses.clear();
-  mutex_.unlock();
+bool OdometryServer::startLIO(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res) {
+    // Those locks are maybe a bit to over protective
+    mutex_.lock();
+    first_frame_ = true;
+    odometry_.Reset();
+    path_msg_.poses.clear();
+    mutex_.unlock();
 
-  /*
-  evitado_msgs::Trigger srv;
-  srv.request.aircraft_changed = true;
-  if (mapping_start_cli_.call(srv)) {
-    ROS_INFO("Odometry available and Started Mapping ..............!");
-  } else {
-    ROS_WARN("Odommetry available but unable to restart mapping");
-  }
-  */
+    /*
+    evitado_msgs::Trigger srv;
+    srv.request.aircraft_changed = true;
+    if (mapping_start_cli_.call(srv)) {
+      ROS_INFO("Odometry available and Started Mapping ..............!");
+    } else {
+      ROS_WARN("Odommetry available but unable to restart mapping");
+    }
+    */
 
-  lidar_odom_ = true;
-  ROS_INFO("Starting Lidar Odometry ..............!");
-  return true;
+    lidar_odom_ = true;
+    ROS_INFO("Starting Lidar Odometry ..............!");
+    return true;
 }
 
-bool OdometryServer::stopLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
-{
-  std_srvs::Empty stop_map_trigger;
-  if (mapping_stop_cli_.call(stop_map_trigger)) {
-    ROS_WARN("Odometry stopped. Stopping mapping");
-  } else {
-    ROS_ERROR("Unable to stop mapping.");
-  }
+bool OdometryServer::stopLIO(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res) {
+    std_srvs::Empty stop_map_trigger;
+    if (mapping_stop_cli_.call(stop_map_trigger)) {
+        ROS_WARN("Odometry stopped. Stopping mapping");
+    } else {
+        ROS_ERROR("Unable to stop mapping.");
+    }
 
-  lidar_odom_ = false;
-  first_frame_ = true;
-  return true;
+    lidar_odom_ = false;
+    first_frame_ = true;
+    return true;
 }
 bool OdometryServer::FailStateRecogntion() {
     auto labels = check_pcd_->ClusterDBSCAN(cluster_density_, cluster_min_points_);
@@ -173,7 +172,20 @@ bool OdometryServer::FailStateRecogntion() {
     sensor_msgs::PointCloud2 check_pub_cloud;
     open3d_conversions::open3dToRos(*check_pcd_, check_pub_cloud, child_frame_);
     check_points_publisher_.publish((check_pub_cloud));
-    return clusters_count.empty();
+
+    fail_state_array.push_back(clusters_count.empty());
+    if (clusters_count.empty()) {
+        // if detected run fail state on next n frames and determine
+        fail_state_each_frame_ = true;
+    }
+
+    if (fail_state_array.size() >= sensor_freq) {
+        auto count = std::count(fail_state_array.begin(), fail_state_array.end(), true);
+        fail_state_array.clear();
+        fail_state_each_frame_ = false;
+        return count > static_cast<int>(sensor_freq / 2);
+    }
+    return false;
 }
 
 void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
@@ -199,9 +211,9 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     // check fail_state
     if (fail_state_on_) {
         mutex_.lock();
-        if (first_frame_) {
+        if (fail_state_each_frame_) {
             check_pcd_->points_ = keypoints;
-            fail_state_array.push_back(FailStateRecogntion());
+            fail_state_ = FailStateRecogntion();
             check_pose_ = t_current;
         }
         mutex_.unlock();
@@ -262,39 +274,40 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     local_map_publisher_.publish(utils::EigenToPointCloud2(odometry_.LocalMap(), local_map_header));
     mutex_.unlock();
 
-    // NOTE: this is after the transform broadcast to ensure it is available once mapping is started.
-    //       It might make sense to split start mapping from stopping to ensure that no eronious transforms are broadcast.
+    // NOTE: this is after the transform broadcast to ensure it is available once mapping is
+    // started.
+    //       It might make sense to split start mapping from stopping to ensure that no eronious
+    //       transforms are broadcast.
 
     // if fail state is true stop mapping
     if (fail_state_) {
-      // if mappig on turn it off
-      if (mapping_is_on_) {
-        std_srvs::Empty stop_map_trigger;
-        if (mapping_stop_cli_.call(stop_map_trigger)) {
-          ROS_WARN("Fail state realised and Stopped Mapping .................!");
-        } else {
-          ROS_ERROR("Fail state realised and mapping not stopped");
-        }
+        // if mappig on turn it off
+        if (mapping_is_on_) {
+            std_srvs::Empty stop_map_trigger;
+            if (mapping_stop_cli_.call(stop_map_trigger)) {
+                ROS_WARN("Fail state realised and Stopped Mapping .................!");
+            } else {
+                ROS_ERROR("Fail state realised and mapping not stopped");
+            }
         }
         mutex_.lock();
         odometry_.Reset();
         path_msg_.poses.clear();
-        first_frame_ =  true;
+        fail_state_each_frame_ = true;
         mutex_.unlock();
 
-      
     } else {
-      // if mappig not on start it
-      if (!mapping_is_on_) {
-        evitado_msgs::Trigger srv;
-        srv.request.aircraft_changed = true;
-        if (mapping_start_cli_.call(srv)) {
-          first_frame_ = false;
-          ROS_INFO("Odometry available and Started Mapping ..............!");
-        } else {
-          ROS_WARN("Odometry available but unable to restart mapping");
+        // if mappig not on start it
+        if (!mapping_is_on_) {
+            evitado_msgs::Trigger srv;
+            srv.request.aircraft_changed = true;
+            if (mapping_start_cli_.call(srv)) {
+                fail_state_each_frame_ = false;
+                ROS_INFO("Odometry available and Started Mapping ..............!");
+            } else {
+                ROS_WARN("Odometry available but unable to restart mapping");
+            }
         }
-      }
     }
 }
 

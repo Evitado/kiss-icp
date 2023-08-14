@@ -111,8 +111,10 @@ private:
     bool fail_state_on_ = false;
     bool mapping_is_on_ = false;
     bool first_frame_   = true; //to run fail_state_ without checking for distance moved
+    bool fail_state_each_frame_   = true; //to run fail_state_ without checking for distance moved
     bool fail_state_    = false;
     std::vector<bool> fail_state_array; // is check fail state on 10scans
+    int sensor_freq = 10;
 };
 
 }  // namespace kiss_icp_ros

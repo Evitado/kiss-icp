@@ -14,7 +14,7 @@
 
   <!-- FAIL-STATE paramaters -->
   <arg name="cluster_density" default="6" />
-  <arg name="cluster_min_points" default="10" />
+  <arg name="cluster_min_points" default="20" />
   <arg name="cluster_run_after_distance" default="2.0" />
 
     <!-- Mapping topics paramaters -->
