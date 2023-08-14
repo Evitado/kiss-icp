@@ -150,6 +150,7 @@ bool OdometryServer::stopLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Res
   }
 
   lidar_odom_ = false;
+  first_frame_ = true;
   return true;
 }
 
@@ -174,7 +175,6 @@ bool OdometryServer::FailStateRecogntion() {
 
 void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     if (!lidar_odom_) return;
-
     const auto points = utils::PointCloud2ToEigen(msg);
     const auto timestamps = [&]() -> std::vector<double> {
         if (!config_.deskew) return {};
@@ -200,7 +200,6 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
             check_pcd_->points_ = keypoints;
             fail_state_ = FailStateRecogntion();
             check_pose_ = t_current;
-            first_frame_ = false;
         }
         mutex_.unlock();
         if (((check_pose_ - t_current).norm() > cluster_run_after_distance_)) {
@@ -273,22 +272,24 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
         } else {
           ROS_ERROR("Fail state realised and mapping not stopped");
         }
-
+        }
         mutex_.lock();
-        first_frame_ = true;
         odometry_.Reset();
         path_msg_.poses.clear();
+        first_frame_ =  true;
         mutex_.unlock();
-      }
+
+      
     } else {
       // if mappig not on start it
       if (!mapping_is_on_) {
         evitado_msgs::Trigger srv;
         srv.request.aircraft_changed = true;
         if (mapping_start_cli_.call(srv)) {
+          first_frame_ = false;
           ROS_INFO("Odometry available and Started Mapping ..............!");
         } else {
-          ROS_WARN("Odommetry available but unable to restart mapping");
+          ROS_WARN("Odometry available but unable to restart mapping");
         }
       }
     }
