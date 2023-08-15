@@ -53,7 +53,7 @@ private:
     void RegisterFrame(const sensor_msgs::PointCloud2 &msg);
     bool SaveTrajectory(kiss_icp::SaveTrajectory::Request &path,
                         kiss_icp::SaveTrajectory::Response &response);
-    bool FailStateRecogntion();
+    void FailStateRecogntion();
     void MappingOn(const std_msgs::Bool mapping_is_on) { mapping_is_on_ = mapping_is_on.data; }
     bool startLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
     bool stopLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
