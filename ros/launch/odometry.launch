@@ -10,7 +10,7 @@
   <arg name="deskew" default="true" />
   <arg name="max_range" default="100.0" />
   <arg name="min_range" default="5.0" />
-  <arg name="voxel_size" default="2.0" />
+  <arg name="voxel_size" default="0.2" />
 
   <!-- FAIL-STATE paramaters -->
   <arg name="cluster_density" default="3.0" />
