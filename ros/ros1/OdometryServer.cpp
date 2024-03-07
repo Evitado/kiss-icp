@@ -70,7 +70,6 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     pnh_.param("max_points_per_voxel", config_.max_points_per_voxel, config_.max_points_per_voxel);
     pnh_.param("initial_threshold", config_.initial_threshold, config_.initial_threshold);
     pnh_.param("min_motion_th", config_.min_motion_th, config_.min_motion_th);
-    pnh_.param("fail_state_on", fail_state_on_, fail_state_on_);
     pnh_.param("cluster_density", cluster_density_, cluster_density_);
     pnh_.param("cluster_run_after_distance", cluster_run_after_distance_,
                cluster_run_after_distance_);
@@ -116,9 +115,6 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
 
     // publish odometry msg
     ROS_INFO("KISS-ICP ROS 1 Odometry Node Initialized");
-
-    // fail state
-    fail_state_array.reserve(10);
 }
 
 bool OdometryServer::startLIO(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res) {
@@ -143,38 +139,6 @@ bool OdometryServer::stopLIO(std_srvs::Empty::Request &req, std_srvs::Empty::Res
     first_frame_ = true;
     return true;
 }
-// void OdometryServer::FailStateRecogntion() {
-// auto labels = check_pcd_->ClusterDBSCAN(cluster_density_, cluster_min_points_);
-// std::vector<Eigen::Vector3d> colors;
-// std::map<int, int> clusters_count;
-
-// std::for_each(labels.cbegin(), labels.cend(), [&](int label) {
-// if (label >= 0) {
-// clusters_count[label]++;
-// colors.emplace_back(Eigen::Vector3d{0, 0, 0}.array() + (label * 37) % 255);
-// } else {
-// colors.emplace_back(Eigen::Vector3d{128.0 / 256.0, 0, 0});
-// }
-// });
-
-// check_pcd_->colors_ = colors;
-// sensor_msgs::PointCloud2 check_pub_cloud;
-// open3d_conversions::open3dToRos(*check_pcd_, check_pub_cloud, child_frame_);
-// check_points_publisher_.publish((check_pub_cloud));
-
-// fail_state_array.push_back(clusters_count.empty());
-// if (clusters_count.empty()) {
-// // if detected run fail state on next n frames and determine
-// fail_state_each_frame_ = true;
-// }
-
-// if (fail_state_array.size() >= sensor_freq) {
-// int count = std::count(fail_state_array.begin(), fail_state_array.end(), true);
-// fail_state_array.clear();
-// fail_state_each_frame_ = false;
-// fail_state_ = count > static_cast<int>(0.5 * sensor_freq);
-// }
-// }
 
 void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     if (!lidar_odom_) return;
@@ -195,21 +159,6 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     // Convert from Eigen to ROS types
     const Eigen::Vector3d t_current = pose.translation();
     const Eigen::Quaterniond q_current = pose.unit_quaternion();
-    // TODO: reimplement by subscribing to odometry topic
-    //  check fail_state
-    //  if (fail_state_on_) {
-    //  mutex_.lock();
-    //  if (fail_state_each_frame_) {
-    //  check_pcd_->points_ = keypoints;
-    //  FailStateRecogntion();
-    //  check_pose_ = t_current;
-    //  } else if ((check_pose_ - t_current).norm() > cluster_run_after_distance_) {
-    //  check_pcd_->points_ = keypoints;
-    //  FailStateRecogntion();
-    //  check_pose_ = t_current;
-    //  }
-    //  mutex_.unlock();
-    //  }
 
     // Broadcast the tf
     geometry_msgs::TransformStamped transform_msg;
@@ -260,43 +209,6 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     local_map_header.frame_id = odom_frame_;
     local_map_publisher_.publish(utils::EigenToPointCloud2(odometry_.LocalMap(), local_map_header));
     mutex_.unlock();
-
-    // NOTE: this is after the transform broadcast to ensure it is available once mapping is
-    // started.
-    //       It might make sense to split start mapping from stopping to ensure that no eronious
-    //       transforms are broadcast.
-
-    // if fail state is true stop mapping and keep checking for fail state
-    // r   if (fail_state_) {
-    // // if mappig on turn it off
-    // if (mapping_is_on_) {
-    // std_srvs::Empty stop_map_trigger;
-    // if (mapping_stop_cli_.call(stop_map_trigger)) {
-    // ROS_WARN("Fail state realised and Stopped Mapping .................!");
-    // } else {
-    // ROS_ERROR("Fail state realised and mapping not stopped");
-    // }
-    // }
-    // mutex_.lock();
-    // odometry_.Reset();
-    // path_msg_.poses.clear();
-    // fail_state_each_frame_ = true;
-    // mutex_.unlock();
-
-    // } else {
-    // // if mappig not on start it and check fail state only after a certain movement
-    // if (!mapping_is_on_) {
-    // evitado_msgs::Trigger srv;
-    // srv.request.aircraft_changed = true;
-    // if (mapping_start_cli_.call(srv)) {
-    // fail_state_each_frame_ = false;
-    // ROS_INFO("Odometry available and Started Mapping ..............!");
-    // } else {
-    // ROS_WARN("Odometry available but unable to restart mapping");
-    // }
-    // fail_state_each_frame_ = false;
-    // }
-    // }
 }
 
 bool OdometryServer::SaveTrajectory(kiss_icp::SaveTrajectory::Request &path,

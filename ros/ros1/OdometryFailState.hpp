@@ -60,9 +60,9 @@ private:
 
     // TODO: rethink this logic
     bool debug_ = false;
-    bool is_moving = true;  // to run fail_state_ without checking for distance moved
     bool fail_state_detected_ = false;
     // start from stopped state
+    bool mapping_odom_stopped_ = true;  // this make sures turn on always at start
     bool prev_fail_state_detected_ = true;
     int sensor_freq_ = 10;
     std::vector<bool> fail_state_buffer_;  // is check fail state on 10scans

@@ -87,23 +87,25 @@ void FailStateRecognition::FailStateRecogntionCb(const sensor_msgs::PointCloud2C
         fail_state_detected_ = count > static_cast<int>(0.6 * sensor_freq_);
         fail_state_buffer_.clear();
     }
-    if (fail_state_detected_) {
-        // TODO stop and start Lio
+
+    if (fail_state_detected_ && !mapping_odom_stopped_) {
         // stop mapping and keep checking for fail state
         std_srvs::Empty stop_map_trigger;
         // first stop mapping and then odometry
         if (mapping_stop_cli_.call(stop_map_trigger)) {
             if (odometry_stop_cli_.call(stop_map_trigger)) {
-                ROS_WARN("Fail state realised and Stopped Mapping and Odometry.................!");
+                mapping_odom_stopped_ = true;
+                ROS_WARN("Fail state realised and Stopped Mapping and Odometry");
             } else {
-                ROS_ERROR("Fail state realised and mapping not stopped");
+                ROS_ERROR("Fail state realised and mapping not stopped....................!");
             }
         } else {
-            ROS_ERROR("Fail state realised and odometry not stopped");
+            ROS_ERROR("Fail state realised and odometry not stopped................!");
         }
+        prev_fail_state_detected_ = fail_state_detected_;
     }
     // only if fail state changed from stop to start chnage stuff
-    else if (prev_fail_state_detected_ != fail_state_detected_) {
+    else if (prev_fail_state_detected_ != fail_state_detected_ && mapping_odom_stopped_) {
         std_srvs::Empty odom_srv;
         evitado_msgs::Trigger map_srv;
         map_srv.request.aircraft_changed = true;
@@ -111,6 +113,7 @@ void FailStateRecognition::FailStateRecogntionCb(const sensor_msgs::PointCloud2C
         if (odometry_start_cli_.call(odom_srv)) {
             if (mapping_start_cli_.call(map_srv)) {
                 fail_state_each_frame_ = false;
+                mapping_odom_stopped_ = false;
                 ROS_INFO("Odometry available and Started Mapping ..............!");
             } else {
                 ROS_WARN("Odometry available but unable to restart mapping");
