@@ -122,13 +122,6 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
 }
 
 bool OdometryServer::startLIO(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res) {
-    // Those locks are maybe a bit to over protective
-    mutex_.lock();
-    first_frame_ = true;
-    odometry_.Reset();
-    path_msg_.poses.clear();
-    mutex_.unlock();
-
     lidar_odom_ = true;
     ROS_INFO("Starting Lidar Odometry ..............!");
     return true;
@@ -141,7 +134,11 @@ bool OdometryServer::stopLIO(std_srvs::Empty::Request &req, std_srvs::Empty::Res
     } else {
         ROS_ERROR("Unable to stop mapping.");
     }
-
+    // clean everything
+    mutex_.lock();
+    odometry_.Reset();
+    path_msg_.poses.clear();
+    mutex_.unlock();
     lidar_odom_ = false;
     first_frame_ = true;
     return true;
