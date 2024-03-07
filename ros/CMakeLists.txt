@@ -43,18 +43,20 @@ endif()
 if("$ENV{ROS_VERSION}" STREQUAL "1")
   message(STATUS "KISS-ICP-ROS1 wrapper will be compiled")
   find_package(
-    catkin REQUIRED
-    COMPONENTS geometry_msgs
-               nav_msgs
-               sensor_msgs
-               roscpp
-               rosbag
-               std_msgs
-               tf2
-               tf2_ros
-               open3d_conversions
-               genmsg
+    catkin REQUIRED COMPONENTS
                evitado_msgs
+               genmsg
+               message_filters
+               nav_msgs
+               open3d_conversions
+               rosbag
+               roscpp
+               sensor_msgs
+               std_msgs
+               std_srvs
+               tf2
+               tf2_ros 
+               geometry_msgs
                )
   add_service_files(FILES SaveTrajectory.srv)
   generate_messages(DEPENDENCIES std_msgs)
@@ -65,7 +67,12 @@ if("$ENV{ROS_VERSION}" STREQUAL "1")
   add_executable(odometry_node ros1/OdometryServer.cpp)
   target_include_directories(odometry_node PUBLIC include ${catkin_INCLUDE_DIRS})
   target_link_libraries(odometry_node kiss_icp::pipeline ${catkin_LIBRARIES} Open3D::Open3D)
-  install(TARGETS odometry_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+ 
+  add_executable(fail_state_node ros1/OdometryFailState.cpp)
+  target_include_directories(fail_state_node PUBLIC include ${catkin_INCLUDE_DIRS})
+  target_link_libraries(fail_state_node kiss_icp::pipeline ${catkin_LIBRARIES} Open3D::Open3D)
+
+  install(TARGETS odometry_node fail_state_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
   install(DIRECTORY launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 elseif("$ENV{ROS_VERSION}" STREQUAL "2")
   message(STATUS "KISS-ICP-ROS2 wrapper will be compiled")

@@ -4,10 +4,10 @@
 
 #include <Eigen/Core>
 #include <algorithm>
-#include <functional>
 #include <iterator>
 #include <vector>
 
+// #include "boost/bind.hpp"
 #include "open3d_conversions/open3d_conversions.h"
 // ROS
 #include <evitado_msgs/Trigger.h>
@@ -44,20 +44,19 @@ FailStateRecognition::FailStateRecognition(const ros::NodeHandle &nh, const ros:
     mapping_start_cli_ = nh_.serviceClient<evitado_msgs::Trigger>("mapping_start_service");
     mapping_stop_cli_ = nh_.serviceClient<std_srvs::Empty>("mapping_stop_service");
     // subsccirbe
-    message_filters::Subscriber<const sensor_msgs::PointCloud2 &> keypoints_points_sub_(
-        nh_, "pointcloud_topic", queue_size_);
-    message_filters::Subscriber<const nav_msgs::Odometry &> path_sub_(nh_, "odometry_topic",
-                                                                      queue_size_);
-    message_filters::TimeSynchronizer<const sensor_msgs::PointCloud2 &, const nav_msgs::Odometry &>
-        sync(keypoints_points_sub_, path_sub_, 10);
+    message_filters::Subscriber<sensor_msgs::PointCloud2> keypoints_sub_(nh_, "pointcloud_topic",
+                                                                         1);
+    message_filters::Subscriber<nav_msgs::Odometry> path_sub_(nh_, "odometry_topic", 1);
+    message_filters::TimeSynchronizer<sensor_msgs::PointCloud2, nav_msgs::Odometry> sync(
+        keypoints_sub_, path_sub_, 10);
 
     // fail state callback
-    sync.registerCallback(std::bind(&FailStateRecognition::FailStateRecogntionCb, this,
-                                    std::placeholders::_1, std::placeholders::_2));
+    sync.registerCallback(
+        boost::bind(&fail_state::FailStateRecognition::FailStateRecogntionCb, this, _1, _2));
 }
 
-void FailStateRecognition::FailStateRecogntionCb(const sensor_msgs::PointCloud2 &check_pcd,
-                                                 const nav_msgs::Odometry &current_pose) {
+void FailStateRecognition::FailStateRecogntionCb(const sensor_msgs::PointCloud2ConstPtr &check_pcd,
+                                                 const nav_msgs::OdometryConstPtr &current_pose) {
     // init
     auto check_pcd_o3d = open3d::geometry::PointCloud();
     open3d_conversions::rosToOpen3d(check_pcd, check_pcd_o3d);
@@ -133,7 +132,7 @@ void FailStateRecognition::FailStateRecogntionCb(const sensor_msgs::PointCloud2 
         });
         check_pcd_o3d.colors_ = cluster_colors;
         sensor_msgs::PointCloud2 check_pub_cloud;
-        open3d_conversions::open3dToRos(check_pcd_o3d, check_pub_cloud, check_pcd.header.frame_id);
+        open3d_conversions::open3dToRos(check_pcd_o3d, check_pub_cloud, check_pcd->header.frame_id);
         check_points_publisher_.publish((check_pub_cloud));
     }
 }
@@ -146,7 +145,6 @@ int main(int argc, char **argv) {
     ros::NodeHandle nh_private("~");
 
     fail_state::FailStateRecognition node(nh, nh_private);
-
     ros::spin();
 
     return 0;

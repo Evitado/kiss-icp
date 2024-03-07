@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "nav_msgs/Odometry.h"
-#include "ros/node_handle.h"
+#include "ros/ros.h"
 #include "ros/subscriber.h"
 #include "sensor_msgs/PointCloud2.h"
 namespace fail_state {
@@ -19,12 +19,16 @@ class FailStateRecognition {
 public:
     /// OdometryServer constructor
     FailStateRecognition(const ros::NodeHandle &nh, const ros::NodeHandle &pnh);
-    void FailStateRecogntionCb(const sensor_msgs::PointCloud2 &check_pcd,
-                               const nav_msgs::Odometry &current_pose);
+    void FailStateRecogntionCb(const sensor_msgs::PointCloud2ConstPtr &check_pcd,
+                               const nav_msgs::OdometryConstPtr &current_pose);
 
 private:
-    inline bool IsFailStateNeeded(const nav_msgs::Odometry &pose) {
-        return ((prev_failsate_tested_position_ - Eigen::Vector3f{pose.pose.pose.position}).norm() <
+    inline bool IsFailStateNeeded(const nav_msgs::OdometryConstPtr &pose) {
+        double x = pose->pose.pose.position.x;
+        double y = pose->pose.pose.position.y;
+        double z = pose->pose.pose.position.z;
+        Eigen::Vector3d current_position{x, y, z};
+        return ((prev_failsate_tested_position_ - current_position).norm() <
                 fail_state_run_after_distance_);
     }
 
@@ -63,7 +67,7 @@ private:
     int sensor_freq_ = 10;
     std::vector<bool> fail_state_buffer_;  // is check fail state on 10scans
     bool fail_state_each_frame_ = true;
-    Eigen::Vector3f prev_failsate_tested_position_{0.0, 0.0, 0.0};  // to check after moving
+    Eigen::Vector3d prev_failsate_tested_position_{0.0, 0.0, 0.0};  // to check after moving
 };
 
 }  // namespace fail_state
