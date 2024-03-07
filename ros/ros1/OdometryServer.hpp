@@ -31,11 +31,12 @@
 #include "kiss_icp/SaveTrajectory.h"
 #include "kiss_icp/pipeline/KissICP.hpp"
 // ROS
+#include <std_srvs/Empty.h>
+
 #include "nav_msgs/Path.h"
 #include "ros/ros.h"
 #include "ros/service_client.h"
 #include "ros/service_server.h"
-#include <std_srvs/Empty.h>
 #include "ros/subscriber.h"
 #include "sensor_msgs/PointCloud2.h"
 #include "std_msgs/Bool.h"
@@ -53,10 +54,12 @@ private:
     void RegisterFrame(const sensor_msgs::PointCloud2 &msg);
     bool SaveTrajectory(kiss_icp::SaveTrajectory::Request &path,
                         kiss_icp::SaveTrajectory::Response &response);
-    void FailStateRecogntion();
-    void MappingOn(const std_msgs::Bool mapping_is_on) { mapping_is_on_ = mapping_is_on.data; }
-    bool startLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
-    bool stopLIO(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
+    // void FailStateRecogntion();
+    inline void MappingOn(const std_msgs::Bool mapping_is_on) {
+        mapping_is_on_ = static_cast<bool>(mapping_is_on.data);
+    }
+    bool startLIO(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
+    bool stopLIO(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
 
     /// Ros node stuff
     ros::NodeHandle nh_;
@@ -107,13 +110,13 @@ private:
     double cluster_density_ = 3.0;
     double cluster_run_after_distance_ = 2.0;
 
-    bool lidar_odom_    = false;
+    bool lidar_odom_ = false;
     bool fail_state_on_ = false;
     bool mapping_is_on_ = false;
-    bool first_frame_   = true; //to run fail_state_ without checking for distance moved
-    bool fail_state_each_frame_   = true; //to run fail_state_ without checking for distance moved
-    bool fail_state_    = false;
-    std::vector<bool> fail_state_array; // is check fail state on 10scans
+    bool first_frame_ = true;            // to run fail_state_ without checking for distance moved
+    bool fail_state_each_frame_ = true;  // to run fail_state_ without checking for distance moved
+    bool fail_state_ = false;
+    std::vector<bool> fail_state_array;  // is check fail state on 10scans
     int sensor_freq = 10;
 };
 
