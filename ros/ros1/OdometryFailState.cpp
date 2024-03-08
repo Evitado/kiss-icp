@@ -34,7 +34,7 @@ FailStateRecognition::FailStateRecognition(const ros::NodeHandle &nh, const ros:
     pnh_.param("cluster_min_points", cluster_min_points_, cluster_min_points_);
     // publisher
     check_points_publisher_ =
-        pnh_.advertise<sensor_msgs::PointCloud2>("fail_state_points_publisher_", queue_size_);
+        pnh_.advertise<sensor_msgs::PointCloud2>("fail_state_points_publisher", queue_size_);
 
     fail_state_buffer_.reserve(sensor_freq_);
     ROS_INFO("Fail State Recogntion Initialized");
@@ -43,16 +43,6 @@ FailStateRecognition::FailStateRecognition(const ros::NodeHandle &nh, const ros:
     odometry_stop_cli_ = nh_.serviceClient<std_srvs::Empty>("odometry_stop_service");
     mapping_start_cli_ = nh_.serviceClient<evitado_msgs::Trigger>("mapping_start_service");
     mapping_stop_cli_ = nh_.serviceClient<std_srvs::Empty>("mapping_stop_service");
-    // subsccirbe
-    message_filters::Subscriber<sensor_msgs::PointCloud2> keypoints_sub_(nh_, "pointcloud_topic",
-                                                                         1);
-    message_filters::Subscriber<nav_msgs::Odometry> path_sub_(nh_, "odometry_topic", 1);
-    message_filters::TimeSynchronizer<sensor_msgs::PointCloud2, nav_msgs::Odometry> sync(
-        keypoints_sub_, path_sub_, 10);
-
-    // fail state callback
-    sync.registerCallback(
-        boost::bind(&fail_state::FailStateRecognition::FailStateRecogntionCb, this, _1, _2));
 }
 
 void FailStateRecognition::FailStateRecogntionCb(const sensor_msgs::PointCloud2ConstPtr &check_pcd,
@@ -62,7 +52,8 @@ void FailStateRecognition::FailStateRecogntionCb(const sensor_msgs::PointCloud2C
     open3d_conversions::rosToOpen3d(check_pcd, check_pcd_o3d);
     // determine; should we run fail state
     bool run_fail_state = IsFailStateNeeded(current_pose);
-    if (!run_fail_state || !fail_state_each_frame_) {
+    if (!run_fail_state && !fail_state_each_frame_) {
+        ROS_WARN("No need to compute fail state");
         return;
     }
     // cluster and count
@@ -72,6 +63,7 @@ void FailStateRecognition::FailStateRecogntionCb(const sensor_msgs::PointCloud2C
     int cluster_count = std::distance(labels_sorted.begin(),
                                       std::unique(labels_sorted.begin(), labels_sorted.end()));
 
+    ROS_WARN("clsuter count is %d", cluster_count);
     // look for atleast one significat cluster of points to regester
     fail_state_buffer_.push_back(cluster_count <= 0);
     if (cluster_count <= 0) {
@@ -148,6 +140,16 @@ int main(int argc, char **argv) {
     ros::NodeHandle nh_private("~");
 
     fail_state::FailStateRecognition node(nh, nh_private);
+    // subsccirbe
+    message_filters::Subscriber<sensor_msgs::PointCloud2> keypoints_sub_(nh, "pointcloud_topic", 1);
+    message_filters::Subscriber<nav_msgs::Odometry> path_sub_(nh, "odometry_topic", 1);
+    message_filters::TimeSynchronizer<sensor_msgs::PointCloud2, nav_msgs::Odometry> sync(
+        keypoints_sub_, path_sub_, 10);
+
+    // fail state callback
+    sync.registerCallback(
+        boost::bind(&fail_state::FailStateRecognition::FailStateRecogntionCb, &node, _1, _2));
+
     ros::spin();
 
     return 0;

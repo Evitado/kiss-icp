@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- ROS paramaters -->
+  <arg name="keypoints_topic" default="/main/lidar_odometry/keypoints"/>
+  <arg name="odometry_topic" default="/main/lidar_odometry/odometry"/>
+
+  <!-- FAIL-STATE paramaters -->
+  <arg name="cluster_density" default="6" />
+  <arg name="cluster_min_points" default="10" />
+  <arg name="cluster_run_after_distance" default="2.0" />
+  <arg name="debug" default= "true" />
+  <arg name="sensor_frequency" default="10" />
+
+    <!-- Mapping topics paramaters -->
+  <arg name="odometry_start_service" default="/main/lidar_odometry/start_lidar_odom" />
+  <arg name="odometry_stop_service" default="/main/lidar_odometry/stop_lidar_odom" />
+  <arg name="mapping_start_service" default="/main/ohm_mapping/start_mapping" />
+  <arg name="mapping_stop_service" default="/main/ohm_mapping/stop_mapping" />
+  <!-- <arg name="mapping_active_topic" default="/main/mapping_active" /> -->
+
+  <!-- Odometry node -->
+  <node pkg="kiss_icp" type="fail_state_node" name="fail_state" output="screen">
+    <param name="debug" value="$(arg debug)" />
+    
+    <!-- ROS params -->
+    <remap from="pointcloud_topic" to="$(arg keypoints_topic)" />
+    <remap from="odometry_topic" to="$(arg odometry_topic)" />
+
+    <!-- Mapping topics params -->
+    <remap from="odometry_start_service" to="$(arg odometry_start_service)" />
+    <remap from="odometry_stop_service" to="$(arg odometry_stop_service)" />
+    <remap from="mapping_start_service" to="$(arg mapping_start_service)" />
+    <remap from="mapping_stop_service" to="$(arg mapping_stop_service)" />
+    <!-- <remap from="mapping_active_topic" to="$(arg mapping_active_topic)" /> -->
+
+    <!-- FAIL-STATE paramaters -->
+    <param name="sensor_frequency" value="$(arg sensor_frequency)" />
+    <param name="cluster_density" value="$(arg cluster_density)" />
+    <param name="cluster_min_points" value="$(arg cluster_min_points)" />
+    <param name="cluster_run_after_distance" value="$(arg cluster_run_after_distance)" />
+  </node>
+
+</launch>
