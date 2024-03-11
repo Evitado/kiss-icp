@@ -55,6 +55,7 @@ FailStateRecognition::FailStateRecognition(const ros::NodeHandle &nh, const ros:
 void FailStateRecognition::FailStateRecogntionCb(const sensor_msgs::PointCloud2ConstPtr &check_pcd,
                                                  const nav_msgs::OdometryConstPtr &current_pose) {
     // init
+    check_pcd_->Clear();
     open3d_conversions::rosToOpen3d(check_pcd, *check_pcd_);
     const Eigen::Vector3d current_position = {current_pose->pose.pose.position.x,
                                               current_pose->pose.pose.position.y,
