@@ -142,7 +142,6 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
         // publish odometry msg
         nav_msgs::Odometry odom_msg;
         odom_msg.header.stamp = msg.header.stamp;
-        // odom_msg.header.seq = msg.header.seq;
         odom_msg.header.frame_id = odom_frame_;
         odom_msg.child_frame_id = child_frame_;
         odom_msg.pose.pose.orientation.x = q_current.x();
