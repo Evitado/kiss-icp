@@ -141,7 +141,6 @@ bool OdometryServer::stopLIO(std_srvs::Empty::Request &req, std_srvs::Empty::Res
 }
 
 void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
-    if (!lidar_odom_) return;
     const auto points = utils::PointCloud2ToEigen(msg);
     const auto timestamps = [&]() -> std::vector<double> {
         if (!config_.deskew) return {};
@@ -152,6 +151,14 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     // Register frame, main entry point to KISS-ICP pipeline
     const auto &[frame, keypoints] = odometry_.RegisterFrame(points, timestamps);
 
+    // Publish KISS-ICP internal data, just for debugging
+    std_msgs::Header frame_header = msg.header;
+    frame_header.frame_id = child_frame_;
+    kpoints_publisher_.publish(utils::EigenToPointCloud2(keypoints, frame_header));
+    // return after publishing keypoints to check for fail state
+    if (!lidar_odom_) return;
+
+    frame_publisher_.publish(utils::EigenToPointCloud2(frame, frame_header));
     //  PublishPose
     const auto pose = odometry_.poses().back();
     mutex_.unlock();
@@ -177,6 +184,7 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     // publish odometry msg
     nav_msgs::Odometry odom_msg;
     odom_msg.header.stamp = msg.header.stamp;
+    // odom_msg.header.seq = msg.header.seq;
     odom_msg.header.frame_id = odom_frame_;
     odom_msg.child_frame_id = child_frame_;
     odom_msg.pose.pose.orientation.x = q_current.x();
@@ -198,10 +206,10 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     mutex_.unlock();
 
     // Publish KISS-ICP internal data, just for debugging
-    std_msgs::Header frame_header = msg.header;
-    frame_header.frame_id = child_frame_;
-    frame_publisher_.publish(utils::EigenToPointCloud2(frame, frame_header));
-    kpoints_publisher_.publish(utils::EigenToPointCloud2(keypoints, frame_header));
+    // std_msgs::Header frame_header = msg.header;
+    // frame_header.frame_id = child_frame_;
+    // frame_publisher_.publish(utils::EigenToPointCloud2(frame, frame_header));
+    // kpoints_publisher_.publish(utils::EigenToPointCloud2(keypoints, frame_header));
 
     // Map is referenced to the odometry_frame
     mutex_.lock();
