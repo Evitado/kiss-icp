@@ -25,8 +25,6 @@
 #include <open3d/Open3D.h>
 #include <open3d/geometry/PointCloud.h>
 // KISS-ICP
-#include <memory>
-#include <vector>
 
 #include "kiss_icp/SaveTrajectory.h"
 #include "kiss_icp/pipeline/KissICP.hpp"
@@ -34,12 +32,9 @@
 #include <std_srvs/Empty.h>
 
 #include "nav_msgs/Path.h"
-#include "ros/ros.h"
-#include "ros/service_client.h"
 #include "ros/service_server.h"
 #include "ros/subscriber.h"
 #include "sensor_msgs/PointCloud2.h"
-#include "std_msgs/Bool.h"
 #include "tf2_ros/transform_broadcaster.h"
 
 namespace kiss_icp_ros {
@@ -54,10 +49,6 @@ private:
     void RegisterFrame(const sensor_msgs::PointCloud2 &msg);
     bool SaveTrajectory(kiss_icp::SaveTrajectory::Request &path,
                         kiss_icp::SaveTrajectory::Response &response);
-    // void FailStateRecogntion();
-    inline void MappingOn(const std_msgs::Bool mapping_is_on) {
-        mapping_is_on_ = static_cast<bool>(mapping_is_on.data);
-    }
     bool startLIO(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
     bool stopLIO(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
 
@@ -82,11 +73,6 @@ private:
     ros::Publisher kpoints_publisher_;
     ros::Publisher local_map_publisher_;
     ros::ServiceServer save_traj_srv_;
-    ros::Publisher check_points_publisher_;
-
-    // mapping service clients
-    ros::ServiceClient mapping_stop_cli_;
-    ros::ServiceClient mapping_start_cli_;
 
     // services
     ros::ServiceServer start_lio_service_;
@@ -100,23 +86,12 @@ private:
     std::string odom_frame_{"odom"};
     std::string child_frame_{"base_link"};
 
-    // to check map conssistency
-    std::shared_ptr<open3d::geometry::PointCloud> check_pcd_ =
-        std::make_shared<open3d::geometry::PointCloud>();
-    Eigen::Vector3d check_pose_;
-
     // Clusters
     int cluster_min_points_ = 30;
     double cluster_density_ = 3.0;
     double cluster_run_after_distance_ = 2.0;
 
     bool lidar_odom_ = false;
-    bool fail_state_on_ = false;
-    bool mapping_is_on_ = false;
-    bool first_frame_ = true;            // to run fail_state_ without checking for distance moved
-    bool fail_state_each_frame_ = true;  // to run fail_state_ without checking for distance moved
-    bool fail_state_ = false;
-    std::vector<bool> fail_state_array;  // is check fail state on 10scans
     int sensor_freq = 10;
 };
 

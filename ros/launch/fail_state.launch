@@ -1,7 +1,6 @@
 <?xml version="1.0"?>
 <launch>
   <!-- ROS paramaters -->
-  <!-- <arg name="keypoints_topic" default="/main/ac_filtered_points"/> -->
   <arg name="keypoints_topic" default="/main/lidar_odometry/keypoints"/>
   <arg name="odometry_topic" default="/main/lidar_odometry/odometry"/>
 

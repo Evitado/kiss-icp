@@ -42,6 +42,10 @@ FailStateRecognition::FailStateRecognition(const ros::NodeHandle &nh, const ros:
     fail_state_buffer_.reserve(sensor_freq_);
     ROS_INFO("Fail State Recogntion Initialized");
 
+    // ROS_INFO("Waiting for mapping services to come up...");
+    // mapping_start_cli_.waitForExistence();
+    // mapping_stop_cli_.waitForExistence();
+    // ROS_INFO("Mapping services available");
     odometry_start_cli_ = nh_.serviceClient<std_srvs::Empty>("odometry_start_service");
     odometry_stop_cli_ = nh_.serviceClient<std_srvs::Empty>("odometry_stop_service");
     mapping_start_cli_ = nh_.serviceClient<evitado_msgs::Trigger>("mapping_start_service");
@@ -110,11 +114,11 @@ void FailStateRecognition::FailStateRecogntionCb(const sensor_msgs::PointCloud2C
     }
 
     // assign to previous;
+    ROS_WARN("Nothing happend");
     prev_failsate_tested_position_ = current_position;
 }
 
 bool FailStateRecognition::stopMappingLio() {
-    ROS_WARN("FAIL STATE Detected: attempting to STOP lio and mapping");
     // stop mapping and keep checking for fail state
     std_srvs::Empty stop_map_trigger;
     // first stop mapping and then odometry
@@ -131,7 +135,6 @@ bool FailStateRecognition::stopMappingLio() {
 
 bool FailStateRecognition::startLioMapping() {
     // if started don't check for each frame and rely on odometry
-    ROS_WARN("Attempting to START lio and mapping");
     std_srvs::Empty start_odom_trigger;
     evitado_msgs::Trigger start_mapping_trigger;
     start_mapping_trigger.request.aircraft_changed = true;

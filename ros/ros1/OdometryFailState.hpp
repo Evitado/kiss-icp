@@ -62,7 +62,7 @@ private:
     bool fail_state_detected_ = false;
     // start from stopped state
     bool mapping_odom_stopped_ = true;  // this make sures turn on always at begin
-    bool prev_fail_state_detected_ = true;
+    bool prev_fail_state_detected_ = false;
     int sensor_freq_ = 10;
     std::vector<bool> fail_state_buffer_;  // is check fail state on 10scans
     bool fail_state_each_frame_ = true;

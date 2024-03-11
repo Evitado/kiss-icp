@@ -23,11 +23,7 @@
 #include <open3d/Open3D.h>
 
 #include <Eigen/Core>
-#include <algorithm>
-#include <numeric>
 #include <vector>
-
-#include "open3d_conversions/open3d_conversions.h"
 
 //  KISS-ICP-ROS
 #include "OdometryServer.hpp"
@@ -47,14 +43,10 @@
 #include "nav_msgs/Path.h"
 #include "ros/init.h"
 #include "ros/node_handle.h"
-#include "ros/ros.h"
 #include "ros/service_client.h"
 #include "ros/subscriber.h"
 #include "sensor_msgs/PointCloud2.h"
-#include "std_msgs/Bool.h"
 #include "std_srvs/Empty.h"
-#include "std_srvs/Trigger.h"
-#include "tf2_ros/static_transform_broadcaster.h"
 #include "tf2_ros/transform_broadcaster.h"
 
 namespace kiss_icp_ros {
@@ -90,20 +82,9 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     // Initialize subscribers
     pointcloud_sub_ = nh_.subscribe<const sensor_msgs::PointCloud2 &>(
         "pointcloud_topic", queue_size_, &OdometryServer::RegisterFrame, this);
-    mapping_is_on_sub_ = nh_.subscribe<const std_msgs::Bool>("mapping_active_topic", queue_size_,
-                                                             &OdometryServer::MappingOn, this);
+
     // Advertise save service
     save_traj_srv_ = pnh_.advertiseService("SaveTrajectory", &OdometryServer::SaveTrajectory, this);
-
-    // Mapping services
-    mapping_start_cli_ = nh_.serviceClient<evitado_msgs::Trigger>("mapping_start_service");
-    mapping_stop_cli_ = nh_.serviceClient<std_srvs::Empty>("mapping_stop_service");
-
-    ROS_INFO("Waiting for mapping services to come up...");
-    mapping_start_cli_.waitForExistence();
-    mapping_stop_cli_.waitForExistence();
-    ROS_INFO("Mapping services available");
-
     start_lio_service_ = pnh_.advertiseService("start_lidar_odom", &OdometryServer::startLIO, this);
     stop_lio_service_ = pnh_.advertiseService("stop_lidar_odom", &OdometryServer::stopLIO, this);
 
@@ -119,18 +100,12 @@ bool OdometryServer::startLIO(std_srvs::Empty::Request &req, std_srvs::Empty::Re
 
 bool OdometryServer::stopLIO(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res) {
     std_srvs::Empty stop_map_trigger;
-    if (mapping_stop_cli_.call(stop_map_trigger)) {
-        ROS_WARN("Odometry stopped. Stopping mapping");
-    } else {
-        ROS_ERROR("Unable to stop mapping.");
-    }
     // clean everything
     mutex_.lock();
     odometry_.Reset();
     path_msg_.poses.clear();
     mutex_.unlock();
     lidar_odom_ = false;
-    first_frame_ = true;
     return true;
 }
 
@@ -141,18 +116,50 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
         return utils::GetTimestamps(msg);
     }();
 
-    mutex_.lock();
     // Register frame, main entry point to KISS-ICP pipeline
     const auto &[frame, keypoints] = odometry_.RegisterFrame(points, timestamps);
+    // publish keypoint and odometry as identity for fail state
+    if (!lidar_odom_) {
+        const auto pose = Sophus::SE3d();
+        // Convert from Eigen to ROS types
+        const Eigen::Vector3d t_current = pose.translation();
+        const Eigen::Quaterniond q_current = pose.unit_quaternion();
 
-    // Publish KISS-ICP internal data, just for debugging
-    // std_msgs::Header frame_header = msg.header;
-    // frame_header.frame_id = child_frame_;
-    // kpoints_publisher_.publish(utils::EigenToPointCloud2(keypoints, frame_header));
-    // // return after publishing keypoints to check for fail state
-    // if (!lidar_odom_) return;
+        // Broadcast the tf
+        geometry_msgs::TransformStamped transform_msg;
+        transform_msg.header.stamp = msg.header.stamp;
+        transform_msg.header.frame_id = odom_frame_;
+        transform_msg.child_frame_id = child_frame_;
+        transform_msg.transform.rotation.x = q_current.x();
+        transform_msg.transform.rotation.y = q_current.y();
+        transform_msg.transform.rotation.z = q_current.z();
+        transform_msg.transform.rotation.w = q_current.w();
+        transform_msg.transform.translation.x = t_current.x();
+        transform_msg.transform.translation.y = t_current.y();
+        transform_msg.transform.translation.z = t_current.z();
+        tf_broadcaster_.sendTransform(transform_msg);
 
-    // frame_publisher_.publish(utils::EigenToPointCloud2(frame, frame_header));
+        // publish odometry msg
+        nav_msgs::Odometry odom_msg;
+        odom_msg.header.stamp = msg.header.stamp;
+        // odom_msg.header.seq = msg.header.seq;
+        odom_msg.header.frame_id = odom_frame_;
+        odom_msg.child_frame_id = child_frame_;
+        odom_msg.pose.pose.orientation.x = q_current.x();
+        odom_msg.pose.pose.orientation.y = q_current.y();
+        odom_msg.pose.pose.orientation.z = q_current.z();
+        odom_msg.pose.pose.orientation.w = q_current.w();
+        odom_msg.pose.pose.position.x = t_current.x();
+        odom_msg.pose.pose.position.y = t_current.y();
+        odom_msg.pose.pose.position.z = t_current.z();
+        odom_publisher_.publish(odom_msg);
+
+        // Publish KISS-ICP internal data, needed for fail state
+        std_msgs::Header frame_header = msg.header;
+        frame_header.frame_id = child_frame_;
+        kpoints_publisher_.publish(utils::EigenToPointCloud2(keypoints, frame_header));
+    }
+
     //  PublishPose
     const auto pose = odometry_.poses().back();
     mutex_.unlock();
