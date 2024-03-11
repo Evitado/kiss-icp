@@ -23,13 +23,11 @@ public:
                                const nav_msgs::OdometryConstPtr &current_pose);
 
 private:
-    inline bool IsFailStateNeeded(const nav_msgs::OdometryConstPtr &pose) {
-        double x = pose->pose.pose.position.x;
-        double y = pose->pose.pose.position.y;
-        double z = pose->pose.pose.position.z;
-        Eigen::Vector3d current_position{x, y, z};
-        return ((prev_failsate_tested_position_ - current_position).norm() <
+    inline bool IsFailStateNeeded(const Eigen::Vector3d &current_position) {
+        return ((prev_failsate_tested_position_ - current_position).norm() >
                 fail_state_run_after_distance_);
+        // std::cerr << "The numbers are" << prev_failsate_tested_position_.transpose() << " and"
+        // << current_position.transpose();
     }
 
     ros::ServiceClient odometry_start_cli_;
@@ -62,7 +60,7 @@ private:
     bool debug_ = false;
     bool fail_state_detected_ = false;
     // start from stopped state
-    bool mapping_odom_stopped_ = true;  // this make sures turn on always at start
+    bool mapping_odom_stopped_ = true;  // this make sures turn on always at begin
     bool prev_fail_state_detected_ = true;
     int sensor_freq_ = 10;
     std::vector<bool> fail_state_buffer_;  // is check fail state on 10scans
