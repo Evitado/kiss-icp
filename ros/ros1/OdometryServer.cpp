@@ -70,10 +70,6 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     pnh_.param("max_points_per_voxel", config_.max_points_per_voxel, config_.max_points_per_voxel);
     pnh_.param("initial_threshold", config_.initial_threshold, config_.initial_threshold);
     pnh_.param("min_motion_th", config_.min_motion_th, config_.min_motion_th);
-    pnh_.param("cluster_density", cluster_density_, cluster_density_);
-    pnh_.param("cluster_run_after_distance", cluster_run_after_distance_,
-               cluster_run_after_distance_);
-    pnh_.param("cluster_min_points", cluster_min_points_, cluster_min_points_);
     if (config_.max_range < config_.min_range) {
         ROS_WARN("[WARNING] max_range is smaller than min_range, setting min_range to 0.0");
         config_.min_range = 0.0;
@@ -87,8 +83,6 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh, const ros::NodeHandle 
     frame_publisher_ = pnh_.advertise<sensor_msgs::PointCloud2>("frame", queue_size_);
     kpoints_publisher_ = pnh_.advertise<sensor_msgs::PointCloud2>("keypoints", queue_size_);
     local_map_publisher_ = pnh_.advertise<sensor_msgs::PointCloud2>("local_map", queue_size_);
-    check_points_publisher_ =
-        pnh_.advertise<sensor_msgs::PointCloud2>("check_points_publisher_", queue_size_);
     // Initialize trajectory publisher
     path_msg_.header.frame_id = odom_frame_;
     traj_publisher_ = pnh_.advertise<nav_msgs::Path>("trajectory", queue_size_);
@@ -152,13 +146,13 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     const auto &[frame, keypoints] = odometry_.RegisterFrame(points, timestamps);
 
     // Publish KISS-ICP internal data, just for debugging
-    std_msgs::Header frame_header = msg.header;
-    frame_header.frame_id = child_frame_;
-    kpoints_publisher_.publish(utils::EigenToPointCloud2(keypoints, frame_header));
-    // return after publishing keypoints to check for fail state
-    if (!lidar_odom_) return;
+    // std_msgs::Header frame_header = msg.header;
+    // frame_header.frame_id = child_frame_;
+    // kpoints_publisher_.publish(utils::EigenToPointCloud2(keypoints, frame_header));
+    // // return after publishing keypoints to check for fail state
+    // if (!lidar_odom_) return;
 
-    frame_publisher_.publish(utils::EigenToPointCloud2(frame, frame_header));
+    // frame_publisher_.publish(utils::EigenToPointCloud2(frame, frame_header));
     //  PublishPose
     const auto pose = odometry_.poses().back();
     mutex_.unlock();
@@ -206,10 +200,10 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
     mutex_.unlock();
 
     // Publish KISS-ICP internal data, just for debugging
-    // std_msgs::Header frame_header = msg.header;
-    // frame_header.frame_id = child_frame_;
-    // frame_publisher_.publish(utils::EigenToPointCloud2(frame, frame_header));
-    // kpoints_publisher_.publish(utils::EigenToPointCloud2(keypoints, frame_header));
+    std_msgs::Header frame_header = msg.header;
+    frame_header.frame_id = child_frame_;
+    frame_publisher_.publish(utils::EigenToPointCloud2(frame, frame_header));
+    kpoints_publisher_.publish(utils::EigenToPointCloud2(keypoints, frame_header));
 
     // Map is referenced to the odometry_frame
     mutex_.lock();

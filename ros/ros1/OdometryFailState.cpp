@@ -1,10 +1,11 @@
 #include "OdometryFailState.hpp"
 
-#include <open3d/Open3D.h>
+// #include <open3d/Open3D.h>
 
 #include <Eigen/Core>
 #include <algorithm>
 #include <iterator>
+#include <memory>
 #include <vector>
 
 // #include "boost/bind.hpp"
@@ -19,6 +20,7 @@
 #include "nav_msgs/Odometry.h"
 #include "ros/init.h"
 #include "ros/node_handle.h"
+#include "ros/time.h"
 #include "sensor_msgs/PointCloud2.h"
 #include "std_srvs/Empty.h"
 
@@ -49,103 +51,113 @@ FailStateRecognition::FailStateRecognition(const ros::NodeHandle &nh, const ros:
 void FailStateRecognition::FailStateRecogntionCb(const sensor_msgs::PointCloud2ConstPtr &check_pcd,
                                                  const nav_msgs::OdometryConstPtr &current_pose) {
     // init
-    auto check_pcd_o3d = open3d::geometry::PointCloud();
-    open3d_conversions::rosToOpen3d(check_pcd, check_pcd_o3d);
-    auto x = current_pose->pose.pose.position.x;
-    auto y = current_pose->pose.pose.position.y;
-    auto z = current_pose->pose.pose.position.z;
-    const Eigen::Vector3d current_position = {x, y, z};
-    // determine; should we run fail state
-    auto p = prev_failsate_tested_position_;
-    auto cp = current_position;
-    ROS_WARN("The prev position is: %f %f %f", p.x(), p.y(), p.z());
-    ROS_WARN("The current position is: %f %f %f \n", cp.x(), cp.y(), cp.z());
+    open3d_conversions::rosToOpen3d(check_pcd, *check_pcd_);
+    const Eigen::Vector3d current_position = {current_pose->pose.pose.position.x,
+                                              current_pose->pose.pose.position.y,
+                                              current_pose->pose.pose.position.z};
+
     bool run_fail_state = IsFailStateNeeded(current_position);
-    ROS_WARN("No need run_fail_state %d and fail_sat_each_frame %d", run_fail_state,
+    ROS_INFO("No need run_fail_state %d and fail_sat_each_frame %d", run_fail_state,
              fail_state_each_frame_);
+
     if (!run_fail_state && !fail_state_each_frame_) {
         ROS_WARN("No need to compute fail state");
         return;
     }
-    // cluster and count
-    const auto labels = check_pcd_o3d.ClusterDBSCAN(cluster_density_, cluster_min_points_);
-    std::vector<int> labels_sorted = labels;
-    std::sort(labels_sorted.begin(), labels_sorted.end());
-    int cluster_count = std::distance(labels_sorted.begin(),
-                                      std::unique(labels_sorted.begin(), labels_sorted.end()));
-
-    ROS_WARN("clsuter count is %d", cluster_count);
-    // look for atleast one significat cluster of points to regester
-    fail_state_buffer_.push_back(cluster_count <= 0);
-    if (cluster_count <= 0) {
-        // run fail srtate next 10 consecutive frames
-        fail_state_each_frame_ = true;
+    // cluster
+    auto labels = check_pcd_->ClusterDBSCAN(cluster_density_, cluster_min_points_);
+    if (debug_) {
+        PublishDebugClouds(labels, check_pcd->header.frame_id);
     }
 
+    // count clusterts
+    std::sort(labels.begin(), labels.end());
+    int cluster_count = std::distance(labels.begin(), std::unique(labels.begin(), labels.end()));
+    fail_state_buffer_.push_back(cluster_count <= 0);
+
+    ROS_INFO("clsuter count is %d", cluster_count);
+
+    // if detected verify on 10 consecutive frames
+    if (cluster_count <= 0) {
+        fail_state_each_frame_ = true;
+    }
+    // determine the fail state
     if (fail_state_buffer_.size() >= sensor_freq_) {
+        ROS_WARN("fail state buffer size is: %d", cluster_count);
         int count = std::count(fail_state_buffer_.begin(), fail_state_buffer_.end(), true);
         fail_state_buffer_.clear();
-        // TODO: are we too optimistic in this case need more testing
         fail_state_each_frame_ = false;
         fail_state_detected_ = count > static_cast<int>(0.6 * sensor_freq_);
         fail_state_buffer_.clear();
     }
 
-    if (fail_state_detected_ || !mapping_odom_stopped_) {
+    // if detected stop maping and lio
+    if (fail_state_detected_) {
+        // keep checking for fail state
+        fail_state_each_frame_ = true;
         ROS_WARN("fail state to STOP lio and mapping");
-        // stop mapping and keep checking for fail state
-        std_srvs::Empty stop_map_trigger;
-        // first stop mapping and then odometry
-        if (mapping_stop_cli_.call(stop_map_trigger)) {
-            if (odometry_stop_cli_.call(stop_map_trigger)) {
-                mapping_odom_stopped_ = true;
-                prev_failsate_tested_position_ = current_position;
-                prev_fail_state_detected_ = fail_state_detected_;
-                ROS_WARN("Fail state realised and Stopped Mapping and Odometry");
-            } else {
-                ROS_ERROR("Fail state realised and mapping not stopped....................!");
-            }
-        } else {
-            ROS_ERROR("Fail state realised and odometry not stopped................!");
+        bool succefully_stopped = stopMappingLio();
+        if (succefully_stopped) {
+            prev_fail_state_detected_ = fail_state_detected_;
         }
     }
-    // only if fail state changed from stop to start chnage stuff
-    else if (prev_fail_state_detected_ != fail_state_detected_ && mapping_odom_stopped_) {
+    // only if fail state changed from stop to start start Lio
+    else if (fail_state_detected_ == false && prev_fail_state_detected_ == true) {
+        // TODO: think of a robust way to start and stop
         ROS_WARN("fail state to START lio and mapping");
-        std_srvs::Empty odom_srv;
-        evitado_msgs::Trigger map_srv;
-        map_srv.request.aircraft_changed = true;
-        // start odometry and then mapping
-        if (odometry_start_cli_.call(odom_srv)) {
-            if (mapping_start_cli_.call(map_srv)) {
-                fail_state_each_frame_ = false;
-                mapping_odom_stopped_ = false;
-                prev_failsate_tested_position_ = current_position;
-                fail_state_each_frame_ = false;
-                prev_fail_state_detected_ = fail_state_detected_;
-                ROS_INFO("Odometry available and Started Mapping ..............!");
-            } else {
-                ROS_WARN("Odometry available but unable to restart mapping");
-            }
-        } else {
-            ROS_WARN("Unable to start odometry, no fail state realized");
-        }
+        fail_state_each_frame_ = false;
+        bool succefully_statrted = startLioMapping();
     }
 
-    // if debug publish the colored clusters
-    if (debug_) {
-        std::vector<Eigen::Vector3d> cluster_colors;
-        cluster_colors.reserve(labels.size());
-        std::for_each(labels.cbegin(), labels.cend(), [&](int label) {
-            cluster_colors.emplace_back(label >= 0
-                                            ? Eigen::Vector3d{0, 0, 0}.array() + (label * 37) % 255
-                                            : Eigen::Vector3d{128.0 / 256.0, 0, 0});
-        });
-        check_pcd_o3d.colors_ = cluster_colors;
-        sensor_msgs::PointCloud2 check_pub_cloud;
-        open3d_conversions::open3dToRos(check_pcd_o3d, check_pub_cloud, check_pcd->header.frame_id);
-        check_points_publisher_.publish((check_pub_cloud));
+    // assign to previous;
+    prev_failsate_tested_position_ = current_position;
+}
+
+bool FailStateRecognition::stopMappingLio() {
+    ROS_WARN("FAIL STATE Detected: attempting to STOP lio and mapping");
+    // stop mapping and keep checking for fail state
+    std_srvs::Empty stop_map_trigger;
+    // first stop mapping and then odometry
+    if (mapping_stop_cli_.exists()) {
+        bool mapping_stopped_ = mapping_stop_cli_.call(stop_map_trigger);
+        if (mapping_stopped_) {
+            return odometry_stop_cli_.call(stop_map_trigger);
+        }
+    } else {
+        return odometry_stop_cli_.call(stop_map_trigger);
     }
+    return false;
+}
+
+bool FailStateRecognition::startLioMapping() {
+    // if started don't check for each frame and rely on odometry
+    ROS_WARN("Attempting to START lio and mapping");
+    std_srvs::Empty start_odom_trigger;
+    evitado_msgs::Trigger start_mapping_trigger;
+    start_mapping_trigger.request.aircraft_changed = true;
+    // start odometry and then mapping
+    if (odometry_start_cli_.exists()) {
+        bool odometry_started = odometry_start_cli_.call(start_odom_trigger);
+        if (odometry_started) {
+            return mapping_start_cli_.call(start_mapping_trigger);
+        }
+    }
+    return false;
+}
+
+void FailStateRecognition::PublishDebugClouds(const std::vector<int> &labels,
+                                              const std::string &frame_id) {
+    std::vector<Eigen::Vector3d> cluster_colors;
+    cluster_colors.reserve(labels.size());
+    std::for_each(labels.cbegin(), labels.cend(), [&](int label) {
+        cluster_colors.emplace_back(label >= 0
+                                        ? Eigen::Vector3d{0, 0, 0}.array() + (label * 30) % 255
+                                        : Eigen::Vector3d{128.0 / 256.0, 0, 0});
+    });
+    check_pcd_->colors_ = cluster_colors;
+    sensor_msgs::PointCloud2 check_pub_cloud;
+    open3d_conversions::open3dToRos(*check_pcd_, check_pub_cloud, frame_id);
+    check_points_publisher_.publish((check_pub_cloud));
 }
 
 }  // namespace fail_state
@@ -160,14 +172,8 @@ int main(int argc, char **argv) {
     message_filters::Subscriber<sensor_msgs::PointCloud2> keypoints_sub_(nh, "pointcloud_topic",
                                                                          10);
     message_filters::Subscriber<nav_msgs::Odometry> path_sub_(nh, "odometry_topic", 10);
-    // message_filters::TimeSynchronizer<sensor_msgs::PointCloud2, nav_msgs::Odometry> sync(
-    // keypoints_sub_, path_sub_, 10);
-    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::PointCloud2,
-                                                            nav_msgs::Odometry>
-        ApproxSyncPolicy;
-    message_filters::Synchronizer<ApproxSyncPolicy> sync(ApproxSyncPolicy(10), keypoints_sub_,
-                                                         path_sub_);
-    // fail state callback
+    message_filters::TimeSynchronizer<sensor_msgs::PointCloud2, nav_msgs::Odometry> sync(
+        keypoints_sub_, path_sub_, 10);
     sync.registerCallback(
         boost::bind(&fail_state::FailStateRecognition::FailStateRecogntionCb, &node, _1, _2));
 

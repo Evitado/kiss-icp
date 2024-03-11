@@ -1,5 +1,5 @@
 #pragma once
-#include <open3d/Open3D.h>
+// #include <open3d/Open3D.h>
 #include <open3d/geometry/PointCloud.h>
 
 #include <Eigen/Core>
@@ -23,12 +23,13 @@ public:
                                const nav_msgs::OdometryConstPtr &current_pose);
 
 private:
-    inline bool IsFailStateNeeded(const Eigen::Vector3d &current_position) {
+    inline bool IsFailStateNeeded(const Eigen::Vector3d &current_position) const {
         return ((prev_failsate_tested_position_ - current_position).norm() >
                 fail_state_run_after_distance_);
-        // std::cerr << "The numbers are" << prev_failsate_tested_position_.transpose() << " and"
-        // << current_position.transpose();
     }
+    bool stopMappingLio();
+    bool startLioMapping();
+    void PublishDebugClouds(const std::vector<int> &labels, const std::string &frame_id);
 
     ros::ServiceClient odometry_start_cli_;
     ros::ServiceClient odometry_stop_cli_;
