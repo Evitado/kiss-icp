@@ -20,7 +20,6 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
-#include <open3d/Open3D.h>
 
 #include <Eigen/Core>
 #include <vector>
@@ -43,7 +42,6 @@
 #include "nav_msgs/Path.h"
 #include "ros/init.h"
 #include "ros/node_handle.h"
-#include "ros/service_client.h"
 #include "ros/subscriber.h"
 #include "sensor_msgs/PointCloud2.h"
 #include "std_srvs/Empty.h"

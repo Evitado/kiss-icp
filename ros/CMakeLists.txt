@@ -26,53 +26,33 @@ project(kiss_icp VERSION 0.2.9 LANGUAGES CXX)
 set(ignore ${CATKIN_INSTALL_INTO_PREFIX_ROOT})
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../cpp/kiss_icp/)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../cpp/kiss_icp ${CMAKE_CURRENT_BINARY_DIR}/kiss_icp)
-else()
-  cmake_minimum_required(VERSION 3.18)
-  message(STATUS "Performing out-of-tree build, fetching KISS-ICP v${CMAKE_PROJECT_VERSION} Release from Github")
-  include(FetchContent)
-  FetchContent_Declare(
-    ext_kiss_icp_core PREFIX kiss_icp_core
-    URL https://github.com/PRBonn/kiss-icp/archive/refs/tags/v${CMAKE_PROJECT_VERSION}.tar.gz SOURCE_SUBDIR
-        cpp/kiss_icp)
-  FetchContent_MakeAvailable(ext_kiss_icp_core)
-endif()
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../cpp/kiss_icp ${CMAKE_CURRENT_BINARY_DIR}/kiss_icp)
 
 if("$ENV{ROS_VERSION}" STREQUAL "1")
   message(STATUS "KISS-ICP-ROS1 wrapper will be compiled")
   find_package(
-    catkin REQUIRED COMPONENTS
-               evitado_msgs
+    catkin REQUIRED
+    COMPONENTS evitado_msgs
                genmsg
-               message_filters
                nav_msgs
-               open3d_conversions
                rosbag
                roscpp
                sensor_msgs
                std_msgs
                std_srvs
                tf2
-               tf2_ros 
-               geometry_msgs
-               )
+               tf2_ros
+               geometry_msgs)
   add_service_files(FILES SaveTrajectory.srv)
   generate_messages(DEPENDENCIES std_msgs)
   catkin_package()
 
-  find_package(Open3D REQUIRED)
   # ROS1 node
   add_executable(odometry_node ros1/OdometryServer.cpp)
   target_include_directories(odometry_node PUBLIC include ${catkin_INCLUDE_DIRS})
-  target_link_libraries(odometry_node kiss_icp::pipeline ${catkin_LIBRARIES} Open3D::Open3D)
- 
-  add_executable(fail_state_node ros1/OdometryFailState.cpp)
-  target_include_directories(fail_state_node PUBLIC include ${catkin_INCLUDE_DIRS})
-  target_link_libraries(fail_state_node kiss_icp::pipeline ${catkin_LIBRARIES} Open3D::Open3D)
+  target_link_libraries(odometry_node kiss_icp::pipeline ${catkin_LIBRARIES})
 
-  install(TARGETS odometry_node fail_state_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+  install(TARGETS odometry_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
   install(DIRECTORY launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 elseif("$ENV{ROS_VERSION}" STREQUAL "2")
   message(STATUS "KISS-ICP-ROS2 wrapper will be compiled")

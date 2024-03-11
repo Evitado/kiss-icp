@@ -22,8 +22,6 @@
 // SOFTWARE.
 #pragma once
 
-#include <open3d/Open3D.h>
-#include <open3d/geometry/PointCloud.h>
 // KISS-ICP
 
 #include "kiss_icp/SaveTrajectory.h"
