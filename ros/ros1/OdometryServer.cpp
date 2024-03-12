@@ -155,6 +155,10 @@ void OdometryServer::RegisterFrame(const sensor_msgs::PointCloud2 &msg) {
         std_msgs::Header frame_header = msg.header;
         frame_header.frame_id = child_frame_;
         kpoints_publisher_.publish(utils::EigenToPointCloud2(keypoints, frame_header));
+
+        path_msg_.poses.clear();
+        traj_publisher_.publish(path_msg_);
+        return;
     }
 
     //  PublishPose
